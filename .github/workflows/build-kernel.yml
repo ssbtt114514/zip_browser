@@ -1,0 +1,159 @@
+name: build-kernel
+
+# 构建示例 FFI 内核插件的多平台产物：
+#   - Windows：zb_example_kernel.dll
+#   - Android：arm64-v8a / armeabi-v7a / x86_64 三个 ABI 的 libzb_example_kernel.so
+# 最后统一打包为可安装的插件 zip（hello_ffi_kernel.zip）。
+#
+# 产物目录严格对应 example_plugins/hello_ffi_kernel/manifest.json 中 kernel.libraries 的声明，
+# 打包脚本 tool/pack_plugin.py 会以插件目录为 zip 根，得到可直接拖入应用安装的插件包。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'example_plugins/hello_ffi_kernel/**'
+      - 'native_plugins/zb_native_surface/include/**'
+      - 'tool/pack_plugin.py'
+      - '.github/workflows/build-kernel.yml'
+
+env:
+  KERNEL_DIR: example_plugins/hello_ffi_kernel
+  ABI_INCLUDE: native_plugins/zb_native_surface/include
+  KERNEL_SRC: example_plugins/hello_ffi_kernel/kernels/windows/zb_example_kernel.c
+
+jobs:
+  # ---------------------------------------------------------------
+  # 1) Windows：用 MSVC 编译 .dll（windows-latest 自带 VS 构建工具）
+  # ---------------------------------------------------------------
+  windows-dll:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile kernel DLL
+        shell: cmd
+        run: |
+          if not exist build\kernel-obj mkdir build\kernel-obj
+          cl /nologo /LD /O2 /D_CRT_SECURE_NO_WARNINGS ^
+             /I %ABI_INCLUDE% ^
+             %KERNEL_SRC% ^
+             /Fe:%KERNEL_DIR%\kernels\windows\zb_example_kernel.dll ^
+             /Fo:build\kernel-obj\
+
+      - name: Verify DLL
+        shell: pwsh
+        run: |
+          $dll = "$env:KERNEL_DIR/kernels/windows/zb_example_kernel.dll"
+          if (-not (Test-Path $dll)) { throw "DLL 未生成: $dll" }
+          Get-Item $dll | Format-List Name, Length
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-windows-dll
+          path: example_plugins/hello_ffi_kernel/kernels/windows/zb_example_kernel.dll
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
+  # 2) Android：用 NDK 交叉编译三个 ABI 的 .so
+  # ---------------------------------------------------------------
+  android-so:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            triple: aarch64-linux-android
+          - abi: armeabi-v7a
+            triple: armv7a-linux-androideabi
+          - abi: x86_64
+            triple: x86_64-linux-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager --install "ndk;28.2.13676358" > /dev/null
+
+      - name: Compile kernel shared library (${{ matrix.abi }})
+        run: |
+          NDK="$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.triple }}24-clang"
+          OUT="$KERNEL_DIR/kernels/android/${{ matrix.abi }}"
+          mkdir -p "$OUT"
+          "$CC" -shared -fPIC -O2 -Wall -Wextra \
+                -I "$ABI_INCLUDE" \
+                "$KERNEL_SRC" \
+                -o "$OUT/libzb_example_kernel.so"
+          file "$OUT/libzb_example_kernel.so"
+
+      - name: Verify exported symbols
+        run: |
+          NDK="$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+          NM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          SO="$KERNEL_DIR/kernels/android/${{ matrix.abi }}/libzb_example_kernel.so"
+          "$NM" -D --defined-only "$SO" | grep -c ' T zb_' || true
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-android-so-${{ matrix.abi }}
+          path: example_plugins/hello_ffi_kernel/kernels/android/${{ matrix.abi }}/libzb_example_kernel.so
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
+  # 3) 汇总：把各平台产物放回 manifest 声明的路径，再打包成插件 zip
+  # ---------------------------------------------------------------
+  package:
+    runs-on: ubuntu-latest
+    needs: [windows-dll, android-so]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all kernel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Assemble plugin directory
+        run: |
+          mkdir -p "$KERNEL_DIR/kernels/windows" "$KERNEL_DIR/kernels/android"
+          cp dist/kernel-windows-dll/zb_example_kernel.dll "$KERNEL_DIR/kernels/windows/"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            mkdir -p "$KERNEL_DIR/kernels/android/$abi"
+            cp "dist/kernel-android-so-$abi/libzb_example_kernel.so" "$KERNEL_DIR/kernels/android/$abi/"
+          done
+          find "$KERNEL_DIR/kernels" -type f | sort
+
+      - name: Validate manifest paths
+        run: |
+          python3 - <<'PY'
+          import json, os
+          root = "example_plugins/hello_ffi_kernel"
+          m = json.load(open(os.path.join(root, "manifest.json"), encoding="utf-8"))
+          libs = m["kernel"]["libraries"]
+          missing = []
+          for p in [libs["windows"], *libs["android"].values()]:
+              if not os.path.isfile(os.path.join(root, p)):
+                  missing.append(p)
+          if missing:
+              raise SystemExit("manifest 声明的文件缺失: " + ", ".join(missing))
+          print("manifest 校验通过：", [libs["windows"], *libs["android"].values()])
+          PY
+
+      - name: Pack plugin zip
+        run: python3 tool/pack_plugin.py "$KERNEL_DIR" hello_ffi_kernel.zip
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello-ffi-kernel-plugin
+          path: hello_ffi_kernel.zip
+          if-no-files-found: error
