@@ -34,7 +34,12 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      # webview_windows 尚未迁移到 C++20 协程，仍在用 /await 时代的实验性协程头，
+      # runner 上最新 MSVC（VS 18）已把 STL1011 升级为硬错误。cl.exe 会把 CL 环境
+      # 变量的内容前置到命令行，借此给所有编译单元注入官方静默宏以恢复可编译。
       - name: Build Windows release
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: flutter build windows --release
 
       - name: Upload artifact
