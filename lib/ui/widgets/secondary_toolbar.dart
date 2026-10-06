@@ -6,7 +6,6 @@ import '../../core/tab/tab_manager.dart';
 import '../../core/web/web_enhance_settings.dart';
 import '../../services/ui_state.dart';
 import '../../services/web_enhance_service.dart';
-import 'zb_slider.dart';
 import 'zb_tool_button.dart';
 
 /// 二级工具栏：资源嗅探、阅读模式、无图、网页滤镜、全屏、字号调节。
@@ -145,43 +144,6 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
             width: 1,
             color: Theme.of(context).colorScheme.outlineVariant,
             margin: const EdgeInsets.symmetric(horizontal: 6),
-          ),
-          // 字号调节
-          SizedBox(
-            width: 150,
-            child: Row(
-              children: [
-                Text('A',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6))),
-                Expanded(
-                  child: ZbSlider(
-                    value: s.fontScale,
-                    min: 0.8,
-                    max: 2.0,
-                    divisions: 24,
-                    label: '${(s.fontScale * 100).round()}%',
-                    onChanged: hasTab
-                        ? (v) => context
-                            .read<WebEnhanceService>()
-                            .setFontScale(v)
-                        : (_) {},
-                    onChangeEnd: hasTab ? (_) => _reapply() : null,
-                  ),
-                ),
-                Text('A',
-                    style: TextStyle(
-                        fontSize: 15,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.75))),
-              ],
-            ),
           ),
         ],
       ),

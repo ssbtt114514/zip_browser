@@ -12,7 +12,6 @@ import '../pages/bookmarks_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import '../pages/kernels_page.dart';
-import '../pages/manual_page.dart';
 import '../pages/plugins_page.dart';
 import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
@@ -62,13 +61,6 @@ class MainToolbar extends StatelessWidget {
             ),
           ),
           const _ExtensionButtons(),
-          ZbToolButton(
-            icon: Icons.menu_book_outlined,
-            tooltip: '使用手册',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ManualPage()),
-            ),
-          ),
           PopupMenuButton<String>(
             tooltip: '菜单',
             splashRadius: 16,

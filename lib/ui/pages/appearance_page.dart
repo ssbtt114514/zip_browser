@@ -24,24 +24,48 @@ class AppearancePage extends StatelessWidget {
           Builder(
             builder: (bctx) {
               final config = bctx.watch<ConfigService>();
-              return Card(
-                child: Column(
-                  children: [
-                    for (final mode in AppStyleMode.values)
-                      RadioListTile<AppStyleMode>(
-                        value: mode,
-                        groupValue: config.styleMode,
-                        title: Text(mode.label),
-                        subtitle: Text(mode.description,
-                            style: const TextStyle(fontSize: 11.5)),
-                        secondary: Icon(mode == AppStyleMode.cupertino
-                            ? Icons.phone_iphone
-                            : Icons.android),
-                        onChanged: (v) =>
-                            v == null ? null : config.setStyleMode(v),
+              return Column(
+                children: [
+                  // 两张预览卡：点击即切换，选中高亮描边（参考 Edge/Vivaldi 风格切换器）
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StylePreviewCard(
+                          label: 'Material',
+                          description: 'Material Design',
+                          selected: config.styleMode == AppStyleMode.material,
+                          icon: Icons.smartphone,
+                          accent: const Color(0xFF6750A4),
+                          onTap: () => config.setStyleMode(AppStyleMode.material),
+                        ),
                       ),
-                  ],
-                ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StylePreviewCard(
+                          label: 'Cupertino',
+                          description: 'iOS 风格',
+                          selected: config.styleMode == AppStyleMode.cupertino,
+                          icon: Icons.phone_iphone,
+                          accent: const Color(0xFF007AFF),
+                          onTap: () => config.setStyleMode(AppStyleMode.cupertino),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      config.styleMode == AppStyleMode.cupertino
+                          ? '已切换为 Cupertino：开关 / 滑块 / 按钮 / 转场跟随 iOS 风格'
+                          : '已切换为 Material：Material Design 3 组件风格',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Theme.of(bctx).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -407,6 +431,155 @@ class _ColorDot extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 风格预览卡：显示该风格的典型控件样貌，点击即切换。
+class _StylePreviewCard extends StatelessWidget {
+  final String label;
+  final String description;
+  final bool selected;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _StylePreviewCard({
+    required this.label,
+    required this.description,
+    required this.selected,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E2228) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? accent : (isDark ? Colors.white24 : Colors.black12),
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          children: [
+            // 预览：风格化的控件示意
+            SizedBox(
+              height: 46,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _previewSwitch(),
+                  const SizedBox(width: 8),
+                  _previewButton(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 14, color: accent),
+                const SizedBox(width: 4),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? accent : scheme.onSurface)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(description,
+                style: TextStyle(fontSize: 10, color: scheme.outline)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Material 3 开关（圆角矩形） vs Cupertino 开关（细长胶囊）
+  Widget _previewSwitch() {
+    final on = label == 'Cupertino' ? accent : accent;
+    if (label == 'Cupertino') {
+      return Container(
+        width: 34,
+        height: 20,
+        decoration: BoxDecoration(
+          color: on,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            width: 16,
+            height: 16,
+            margin: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(
+                color: Colors.white, shape: BoxShape.circle),
+          ),
+        ),
+      );
+    }
+    // Material：矩形轨道 + 左侧圆形拖柄
+    return Container(
+      width: 34,
+      height: 20,
+      decoration: BoxDecoration(
+        color: on.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: 16,
+          height: 16,
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(color: on, shape: BoxShape.circle),
+        ),
+      ),
+    );
+  }
+
+  Widget _previewButton() {
+    if (label == 'Cupertino') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: accent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: const Text('按钮',
+            style: TextStyle(fontSize: 10, color: Colors.white)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent, width: 1),
+      ),
+      child: Text('按钮',
+          style: TextStyle(fontSize: 10, color: accent)),
     );
   }
 }

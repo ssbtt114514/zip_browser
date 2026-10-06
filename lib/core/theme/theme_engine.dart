@@ -61,12 +61,55 @@ class ThemeEngine {
       visualDensity: s.visualDensity,
       textTheme: _textTheme(s, isDark),
       appBarTheme: AppBarTheme(
-        centerTitle: false,
+        centerTitle: cupertino,
         backgroundColor: isDark ? const Color(0xFF1A1D22) : Colors.white,
         foregroundColor: isDark ? Colors.white : Colors.black87,
-        elevation: 0,
+        elevation: cupertino ? 0.5 : 0,
         scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
+        // Cupertino 标题加粗居中
+        titleTextStyle: TextStyle(
+          fontSize: 17,
+          fontWeight: cupertino ? FontWeight.w600 : FontWeight.w500,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+        iconTheme: IconThemeData(
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
+      // Cupertino 导航栏底部细分割线
+      bottomAppBarTheme: BottomAppBarThemeData(
+        color: isDark ? const Color(0xFF1A1D22) : Colors.white,
+        elevation: 0,
+      ),
+      dividerTheme: DividerThemeData(
+        color: isDark ? Colors.white12 : Colors.black12,
+        thickness: cupertino ? 0.4 : 1,
+        space: 1,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: isDark ? const Color(0xFF1E2228) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cupertino ? 14 : 20),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: isDark ? const Color(0xFF22262C) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cupertino ? 13 : 8),
+        ),
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: isDark ? Colors.white70 : Colors.black54,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: scheme.primary,
+        unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
+        indicatorColor: scheme.primary,
+        indicatorSize: cupertino
+            ? TabBarIndicatorSize.label
+            : TabBarIndicatorSize.tab,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -123,11 +166,6 @@ class ThemeEngine {
           if (states.contains(WidgetState.selected)) return scheme.primary;
           return null;
         }),
-      ),
-      dividerTheme: DividerThemeData(
-        color: isDark ? Colors.white12 : Colors.black12,
-        thickness: 1,
-        space: 1,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
