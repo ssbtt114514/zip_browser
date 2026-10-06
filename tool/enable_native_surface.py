@@ -9,6 +9,10 @@
 import os
 import sys
 
+# Windows 控制台默认编码可能不是 UTF-8，显式切换以避免中文输出报 UnicodeEncodeError
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WIN_DIR = os.path.join(ROOT, "windows")
 
