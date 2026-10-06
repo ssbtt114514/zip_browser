@@ -254,8 +254,15 @@ window.zipBrowser.on('event', data => ...)
    不一致则强制停用并在插件页告警
 3. **白名单**：`trusted_plugins.json`（插件 id → 允许的 zip 哈希），
    可在设置中强制仅允许白名单
-4. **权限最小化**：插件仅能调用其声明权限对应的 bridge 方法
+4. **权限最小化**：页面与 content script 仅能调用其声明权限对应的 bridge
+   方法（`JsBridgeHub.handleRaw` 按 `allowedMethods` 白名单拦截）
 5. **原生库安全**：FFI 库必须 ABI 版本匹配；建议配合签名使用
+6. **原生内核的调用路径（重要区别）**：插件内核经 `host_dispatch` 发起的宿主
+   能力请求走 `JsBridgeHub.invokeLocal`，**不经过上面的权限白名单**。这是刻意
+   设计 —— 原生库本身就是宿主体内的任意代码，白名单无法约束它。因此对插件
+   内核的信任依据是「安装指纹 + 目录防篡改 + ABI 版本匹配」，而非权限声明。
+   相应地，宿主对内核可用的能力做了收敛：`net.fetch` 只接受 http/https 与
+   GET/POST，并设默认 2 MiB、硬上限 16 MiB 的响应体截断。
 
 升级路径：引入 `pointycastle` 对 `signature.sig` 做
 **RSASSA-PKCS1-v1_5 + SHA-256** 验签（内置宿主公钥），
