@@ -23,11 +23,6 @@
 #include <mutex>
 #include <vector>
 
-// FFI 内核的帧提交入口（定义见文件末尾）
-extern "C" void zb_surface_submit_frame(int64_t texture_id, const uint8_t* rgba,
-                                        int32_t width, int32_t height,
-                                        int32_t stride);
-
 namespace {
 
 using flutter::EncodableMap;
@@ -164,11 +159,8 @@ class NativeSurfacePlugin : public flutter::Plugin {
       g_surfaces[id] = state;
     }
 
-    EncodableMap reply;
-    reply[EncodableValue("textureId")] = EncodableValue(id);
-    reply[EncodableValue("submit_frame_address")] = EncodableValue(
-        reinterpret_cast<int64_t>(&zb_surface_submit_frame));
-    result->Success(EncodableValue(reply));
+    // Dart 端用 invokeMethod<int> 接收，直接回传纹理 id。
+    result->Success(EncodableValue(id));
   }
 
   void DestroySurface(int64_t id) {
