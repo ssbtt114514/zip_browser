@@ -140,7 +140,36 @@ python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_li
 插件内核（让 zip 里的内核显示画面）的完整步骤见
 **[docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)**。
 
-### 6. 构建安装包 / 内核产物
+### 6. 本地一键验证
+
+不需要 NDK / VS / GitHub Actions，一条命令复现 CI 里所有能离线跑的检查：
+
+```bash
+python tool/verify_all.py          # 全部检查
+python tool/verify_all.py --list   # 只列出检查项
+```
+
+覆盖：内核编译（`-Wall -Wextra`）+ 端到端自检、预编译 DLL 的 16 个 ABI 导出符号、
+两份清单声明的产物路径、工作流 YAML 合法性、工作流引用的仓库内路径是否存在、
+`flutter analyze` 与 `flutter test`。缺少某项工具链时该项标记 `SKIP` 而非失败。
+
+Flutter 不在 PATH 时用环境变量指定：
+
+```bat
+set FLUTTER_BIN=D:\flutter\bin\flutter.bat
+```
+
+测试套件里还有两个专门针对内核的回归文件：
+
+- `test/ffi_kernel_integration_test.dart` —— 用 App **真实的 FFI 加载器**
+  加载预编译 DLL，跑通「打开库（校验 ABI 版本）→ 绑定表面 → load_url →
+  tick 出帧 → 读取帧缓冲确认真的画了东西 → eval_js / 输入事件 / 改尺寸重排版」。
+  这是唯一能同时验证 C 内核实现与 Dart 侧 ABI 绑定是否彼此吻合的手段。
+- `test/lite_kernel_package_test.dart` —— 覆盖「打包 → 安装」链路：
+  插件包/独立内核包能被 `PluginPackage` / `KernelPackage` 安装，
+  且随包的 Windows DLL 是真实 PE 并导出全部 16 个 ABI 符号。
+
+### 7. 构建安装包 / 内核产物
 
 Android 安装包：
 
