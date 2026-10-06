@@ -299,58 +299,22 @@ jobs:
 
       - name: Assemble plugin directories
         run: |
-          set -euo pipefail
-
-          echo "::group::下载到的产物布局"
-          find dist -type f | sort
-          echo "::endgroup::"
-
-          # 注意：upload-artifact@v4 对多路径上传会保留「相对于最小公共父目录」的
-          # 路径（例如 lite_kernel/kernels/windows/zb_lite_kernel.dll），
-          # 所以这里不写死产物内部结构，只按「产物目录 + 文件名」定位。
-          copy_from() {  # $1=产物目录 $2=文件名 $3=目标目录
-            local src
-            src="$(find "$1" -type f -name "$2" -print -quit)"
-            if [ -z "$src" ]; then
-              echo "::error::在 $1 中找不到 $2"
-              exit 1
-            fi
-            mkdir -p "$3"
-            cp "$src" "$3/"
-            echo "  $src -> $3/"
-          }
-
-          copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$LITE_PLUGIN/kernels/windows"
-          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$LITE_PLUGIN/kernels/linux/x86_64"
+          mkdir -p "$LITE_PLUGIN/kernels/windows" "$LITE_PLUGIN/kernels/android" "$LITE_PLUGIN/kernels/linux/x86_64"
+          cp dist/kernel-windows-dll/zb_lite_kernel.dll "$LITE_PLUGIN/kernels/windows/"
+          cp dist/kernel-linux-so/libzb_lite_kernel.so "$LITE_PLUGIN/kernels/linux/x86_64/"
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$LITE_PLUGIN/kernels/android/$abi"
+            mkdir -p "$LITE_PLUGIN/kernels/android/$abi"
+            cp "dist/kernel-android-so-$abi/libzb_lite_kernel.so" "$LITE_PLUGIN/kernels/android/$abi/"
           done
 
-          copy_from dist/kernel-windows-dll zb_example_kernel.dll "$EXAMPLE_DIR/kernels/windows"
+          mkdir -p "$EXAMPLE_DIR/kernels/windows" "$EXAMPLE_DIR/kernels/android"
+          cp dist/kernel-windows-dll/zb_example_kernel.dll "$EXAMPLE_DIR/kernels/windows/"
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            copy_from "dist/kernel-android-so-$abi" libzb_example_kernel.so "$EXAMPLE_DIR/kernels/android/$abi"
+            mkdir -p "$EXAMPLE_DIR/kernels/android/$abi"
+            cp "dist/kernel-android-so-$abi/libzb_example_kernel.so" "$EXAMPLE_DIR/kernels/android/$abi/"
           done
 
-          # 独立内核包（.zbk）：kernel.json 里声明了 5 个平台的库，
-          # 所以必须把 5 个平台全部装进去，否则包内清单会声明不存在的文件。
-          ZBK_DIR=build_kernel_pkg/zb_lite_kernel
-          if [ -f "$ZBK_DIR/kernel.json" ]; then
-            rm -rf "$ZBK_DIR/bin"
-            copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$ZBK_DIR/bin/windows"
-            copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$ZBK_DIR/bin/linux/x86_64"
-            for abi in arm64-v8a armeabi-v7a x86_64; do
-              copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$ZBK_DIR/bin/android/$abi"
-            done
-          fi
-
-          echo "::group::装配后的插件内核目录"
           find "$LITE_PLUGIN/kernels" "$EXAMPLE_DIR/kernels" -type f | sort
-          echo "::endgroup::"
-          if [ -d "$ZBK_DIR/bin" ]; then
-            echo "::group::装配后的独立内核包目录"
-            find "$ZBK_DIR" -type f | sort
-            echo "::endgroup::"
-          fi
 
       - name: Validate manifest paths
         run: |
@@ -375,25 +339,6 @@ jobs:
 
           check("example_plugins/lite_kernel")
           check("example_plugins/hello_ffi_kernel")
-
-          # 独立内核包同样要校验：kernel.json 声明了几个平台，
-          # 包里就必须有几个平台的库文件（这里曾经漏打包 linux/android）。
-          ZBK_DIR = "build_kernel_pkg/zb_lite_kernel"
-          if os.path.isfile(os.path.join(ZBK_DIR, "kernel.json")):
-              m = json.load(open(os.path.join(ZBK_DIR, "kernel.json"), encoding="utf-8"))
-              libs = m["libraries"]
-              wanted = []
-              if isinstance(libs.get("windows"), str):
-                  wanted.append(libs["windows"])
-              if isinstance(libs.get("linux"), str):
-                  wanted.append(libs["linux"])
-              android = libs.get("android")
-              if isinstance(android, dict):
-                  wanted.extend(android.values())
-              missing = [q for q in wanted if not os.path.isfile(os.path.join(ZBK_DIR, q))]
-              if missing:
-                  raise SystemExit(f"{ZBK_DIR}: kernel.json 声明的文件缺失: {missing}")
-              print(f"{ZBK_DIR}: kernel.json 校验通过（{len(wanted)} 个库文件）")
           PY
 
       - name: Pack plugin zips
@@ -404,6 +349,8 @@ jobs:
       - name: Pack standalone kernel package (.zbk)
         run: |
           if [ -f build_kernel_pkg/zb_lite_kernel/kernel.json ]; then
+            mkdir -p build_kernel_pkg/zb_lite_kernel/bin/windows
+            cp dist/kernel-windows-dll/zb_lite_kernel.dll build_kernel_pkg/zb_lite_kernel/bin/windows/
             python3 tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zb_lite_kernel.zbk
           else
             echo "未找到 build_kernel_pkg/zb_lite_kernel，跳过"

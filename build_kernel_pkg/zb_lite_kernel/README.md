@@ -58,24 +58,9 @@ sh tool/build_lite_kernel.sh selftest
 
 ## 打包成 .zbk
 
-`kernel.json` 声明了 windows / linux / android(三 ABI) 共 5 个平台的库，
-所以打包前要先把各平台产物装配进本目录的 `bin/`：
-
 ```bash
-# 1) 构建各平台内核库（Windows 用 tool\build_lite_kernel.bat；
-#    linux / android-* 需要 Linux 或 macOS 主机，Android 还需 NDK）
-sh tool/build_lite_kernel.sh all
-
-# 2) 按 kernel.json 的声明从 example_plugins/lite_kernel/kernels 装配到 bin/
-python tool/assemble_kernel_pkg.py
-
-# 3) 打包（打包器会校验 5 个声明平台的文件是否都在，缺任何一个都会拒绝打包）
 python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
 ```
-
-> 本地只构建了部分平台时，`pack_kernel.py` 会明确列出缺哪些平台的文件；
-> 也可以直接使用 CI（`build-kernel` 工作流）产出的完整 `zb_lite_kernel.zbk`，
-> 它的 5 个平台已全部装配好。
 
 安装：应用内 **设置 → 内核管理 → 安装内核包**，选择该 `.zbk`；
 随后在内核列表中选中「轻量文本内核（.zbk）」，**新开标签页**即由它渲染。

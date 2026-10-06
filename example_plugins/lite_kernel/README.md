@@ -69,8 +69,7 @@ cmake --build build/lite-kernel
 
 1. 确保宿主已集成原生表面插件：`python tool/enable_native_surface.py`
    （没有它内核能加载但画面无法上屏）。
-2. 打包插件（清单声明了 5 个平台，打包器会核对每个平台的文件是否都在；
-   没构建过的平台请先按上面的命令构建，或直接取 CI 的 `lite_kernel.zip`）：
+2. 打包插件：
 
    ```bash
    python tool/pack_plugin.py example_plugins/lite_kernel

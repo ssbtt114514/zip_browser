@@ -131,16 +131,8 @@ sh tool/build_lite_kernel.sh android-arm64-v8a    # 另有 armeabi-v7a / x86_64
 
 # 打包插件 / 独立内核包
 python tool/pack_plugin.py example_plugins/lite_kernel
-
-# 独立内核包的 kernel.json 声明了 5 个平台，所以打包前要先把各平台产物
-# 装配进它的 bin/ 目录（否则打包器会拒绝，避免打出「清单声明了、包里却没有」的包）
-python tool/assemble_kernel_pkg.py
 python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
 ```
-
-> 打包器会校验「清单里声明的每个平台库是否真的存在」，不一致就直接拒绝打包；
-> 没在本地构建过的平台，也可以直接取 CI（`build-kernel` 工作流）产出的完整
-> `lite_kernel.zip` 与 `zb_lite_kernel.zbk`。
 
 > 主机要求：`selftest` 任意平台可用；`linux` / `android-*` 需要 **Linux 或 macOS**
 > 主机（Android 还需 NDK）。脚本会主动拒绝在 Windows 上交叉编译 —— 因为那会把
