@@ -375,6 +375,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 本作业要用 `dart run tool/verify_packages.dart` 逐个校验打好的包。
+      # ubuntu-latest 上**没有**预装 dart，缺了它这一步会以 127（command not found）
+      # 直接失败（v0.7.0 的第一次运行就是这么挂的）。显式装 Flutter 才能拿到 dart。
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
       - name: Download all kernel artifacts
         uses: actions/download-artifact@v4
         with:
