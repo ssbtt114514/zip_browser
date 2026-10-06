@@ -49,10 +49,10 @@ class _AddressBarState extends State<AddressBar> {
 
     return Expanded(
       child: Container(
-        height: 34,
+        height: 42,
         decoration: BoxDecoration(
           color: _focusNode.hasFocus ? Colors.white : const Color(0xFFF1F5F8),
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(21),
           border: Border.all(
             color: _focusNode.hasFocus
                 ? Theme.of(context).colorScheme.primary
@@ -76,7 +76,7 @@ class _AddressBarState extends State<AddressBar> {
                         : secure
                             ? Icons.lock_outline
                             : Icons.lock_open,
-                    size: 15,
+                    size: 16,
                     color: internal
                         ? Colors.black38
                         : secure
@@ -97,12 +97,12 @@ class _AddressBarState extends State<AddressBar> {
                     controller: _controller,
                     focusNode: _focusNode,
                     textInputAction: TextInputAction.go,
-                    style: const TextStyle(fontSize: 13.5),
+                    style: const TextStyle(fontSize: 15),
                     decoration: const InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
                       hintText: '搜索或输入网址',
-                      contentPadding: EdgeInsets.symmetric(vertical: 9),
+                      contentPadding: EdgeInsets.symmetric(vertical: 11),
                     ),
                     onSubmitted: (value) async {
                       await tm.navigateActive(value);
@@ -131,7 +131,7 @@ class _AddressBarState extends State<AddressBar> {
                     padding: const EdgeInsets.all(5),
                     child: Icon(
                       loading ? Icons.close : Icons.refresh,
-                      size: 17,
+                      size: 19,
                     ),
                   ),
                 );
@@ -161,7 +161,7 @@ class _AddressBarState extends State<AddressBar> {
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       marked ? Icons.star : Icons.star_border,
-                      size: 17,
+                      size: 19,
                       color: marked ? Colors.amber.shade700 : null,
                     ),
                   ),

@@ -10,6 +10,7 @@ import 'find_bar.dart';
 import 'pages/sniff_panel.dart';
 import 'widgets/browser_tab_bar.dart';
 import 'widgets/main_toolbar.dart';
+import 'widgets/secondary_toolbar.dart';
 
 /// 浏览器主外壳
 class BrowserShell extends StatelessWidget {
@@ -32,6 +33,15 @@ class BrowserShell extends StatelessWidget {
           children: [
             if (!compact) const BrowserTabBar(),
             const MainToolbar(),
+            // 二级工具栏（工具箱），展开/收起带尺寸动画
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: uiState.secondaryOpen
+                  ? const SecondaryToolbar()
+                  : const SizedBox(width: double.infinity, height: 0),
+            ),
             const _ProgressStrip(),
             if (compact) const BrowserTabBar(compact: true),
             if (findOpen && tab != null)

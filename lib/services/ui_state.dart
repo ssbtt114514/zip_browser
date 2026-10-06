@@ -8,6 +8,9 @@ class BrowserUiState extends ChangeNotifier {
   bool _sniffOpen = false;
   bool get sniffOpen => _sniffOpen;
 
+  bool _secondaryOpen = false;
+  bool get secondaryOpen => _secondaryOpen;
+
   void openFind() {
     if (_findOpen) return;
     _findOpen = true;
@@ -34,6 +37,11 @@ class BrowserUiState extends ChangeNotifier {
 
   void toggleSniff() {
     _sniffOpen = !_sniffOpen;
+    notifyListeners();
+  }
+
+  void toggleSecondary() {
+    _secondaryOpen = !_secondaryOpen;
     notifyListeners();
   }
 }

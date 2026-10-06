@@ -8,7 +8,6 @@ import '../../core/tab/tab_manager.dart';
 import '../../core/tab/tab_model.dart';
 import '../../services/share_helper.dart';
 import '../../services/ui_state.dart';
-import '../../services/web_enhance_service.dart';
 import '../pages/bookmarks_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
@@ -17,6 +16,7 @@ import '../pages/plugins_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/userscripts_page.dart';
 import 'address_bar.dart';
+import 'zb_tool_button.dart';
 
 /// 主工具栏：导航控制 + 地址栏 + 扩展按钮 + 菜单
 class MainToolbar extends StatelessWidget {
@@ -28,61 +28,36 @@ class MainToolbar extends StatelessWidget {
     final tab = tm.active;
 
     return Container(
-      height: 44,
+      height: 52,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          _NavButton(
+          ZbToolButton(
             icon: Icons.arrow_back,
-            enabled: tab?.canGoBack.value ?? false,
             tooltip: '后退',
-            onTap: () => tab?.kernel.goBack(),
+            onTap: (tab?.canGoBack.value ?? false)
+                ? () => tab?.kernel.goBack()
+                : null,
           ),
-          _NavButton(
+          ZbToolButton(
             icon: Icons.arrow_forward,
-            enabled: tab?.canGoForward.value ?? false,
             tooltip: '前进',
-            onTap: () => tab?.kernel.goForward(),
+            onTap: (tab?.canGoForward.value ?? false)
+                ? () => tab?.kernel.goForward()
+                : null,
           ),
           const SizedBox(width: 2),
           const AddressBar(),
-          const SizedBox(width: 4),
-          // 资源嗅探按钮
+          const SizedBox(width: 2),
+          // 工具箱：展开 / 收起二级工具栏
           Consumer<BrowserUiState>(
-            builder: (_, ui, __) => IconButton(
-              icon: Icon(
-                ui.sniffOpen ? Icons.satellite_alt : Icons.satellite_alt_outlined,
-                size: 19,
-                color: ui.sniffOpen
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              tooltip: '资源嗅探',
-              splashRadius: 15,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: () {
-                ui.toggleSniff();
-                if (ui.sniffOpen) {
-                  // 打开面板时触发一次扫描
-                  context.read<TabManager>().active?.kernel.triggerSniff();
-                }
-              },
+            builder: (_, ui, __) => ZbToolButton(
+              icon: ui.secondaryOpen ? Icons.tune : Icons.tune_outlined,
+              tooltip: '工具箱',
+              selected: ui.secondaryOpen,
+              onTap: ui.toggleSecondary,
             ),
-          ),
-          // 阅读模式（切换当前页）
-          IconButton(
-            icon: const Icon(Icons.chrome_reader_mode_outlined, size: 19),
-            tooltip: '阅读模式',
-            splashRadius: 15,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            onPressed: tab == null
-                ? null
-                : () => context
-                    .read<WebEnhanceService>()
-                    .toggleReader(tab.kernel),
           ),
           const _ExtensionButtons(),
           PopupMenuButton<String>(
@@ -273,34 +248,6 @@ class MainToolbar extends StatelessWidget {
   }
 }
 
-class _NavButton extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _NavButton({
-    required this.icon,
-    required this.enabled,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      icon: Icon(icon, size: 19),
-      tooltip: tooltip,
-      splashRadius: 15,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-      color: enabled ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.3),
-      onPressed: enabled ? onTap : null,
-    );
-  }
-}
-
 /// 已启用插件的工具栏按钮
 class _ExtensionButtons extends StatelessWidget {
   const _ExtensionButtons();
@@ -314,21 +261,17 @@ class _ExtensionButtons extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (final plugin in plugins)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: IconButton(
-              tooltip: plugin.manifest.name,
-              splashRadius: 15,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              icon: const Icon(Icons.extension, size: 18),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('${plugin.manifest.name} v${plugin.manifest.version}'),
-                  duration: const Duration(seconds: 1),
-                ));
-              },
-            ),
+          ZbToolButton(
+            size: 18,
+            icon: Icons.extension,
+            tooltip: '${plugin.manifest.name} v${plugin.manifest.version}',
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content:
+                    Text('${plugin.manifest.name} v${plugin.manifest.version}'),
+                duration: const Duration(seconds: 1),
+              ));
+            },
           ),
       ],
     );
