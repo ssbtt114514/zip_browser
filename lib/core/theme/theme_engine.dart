@@ -1,24 +1,29 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/palettes/core_palette.dart';
 
 import 'appearance_settings.dart';
 
 /// 主题引擎：根据 [AppearanceSettings] 生成亮/暗 ThemeData。
 class ThemeEngine {
-  static ThemeData light(AppearanceSettings s) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: s.seedColor,
-      brightness: Brightness.light,
-    );
+  /// 计算颜色方案：优先使用莫奈动态色，否则用 seed 色生成。
+  static ColorScheme _scheme(
+      AppearanceSettings s, Brightness brightness, CorePalette? monet) {
+    if (s.monetEnabled && monet != null) {
+      return monet.toColorScheme(brightness: brightness);
+    }
+    return ColorScheme.fromSeed(seedColor: s.seedColor, brightness: brightness);
+  }
+
+  static ThemeData light(AppearanceSettings s, {CorePalette? monet}) {
+    final scheme = _scheme(s, Brightness.light, monet);
     final accent = s.accentColor ?? scheme.primary;
     return _build(scheme, accent, s, Brightness.light);
   }
 
-  static ThemeData dark(AppearanceSettings s) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: s.seedColor,
-      brightness: Brightness.dark,
-    );
+  static ThemeData dark(AppearanceSettings s, {CorePalette? monet}) {
+    final scheme = _scheme(s, Brightness.dark, monet);
     final accent = s.accentColor ?? scheme.primary;
     return _build(scheme, accent, s, Brightness.dark);
   }

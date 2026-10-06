@@ -13,6 +13,7 @@ import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import '../pages/kernels_page.dart';
 import '../pages/plugins_page.dart';
+import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/userscripts_page.dart';
 import 'address_bar.dart';
@@ -93,6 +94,9 @@ class MainToolbar extends StatelessWidget {
               const PopupMenuItem(
                   value: 'find', child: _MenuRow(Icons.search, '页面中查找')),
               const PopupMenuItem(
+                  value: 'scan',
+                  child: _MenuRow(Icons.qr_code_scanner, '扫一扫')),
+              const PopupMenuItem(
                   value: 'share', child: _MenuRow(Icons.share, '分享')),
               CheckedPopupMenuItem(
                 value: 'desktop',
@@ -151,6 +155,13 @@ class MainToolbar extends StatelessWidget {
         );
       case 'find':
         context.read<BrowserUiState>().openFind();
+      case 'scan':
+        final raw = await Navigator.of(context).push<String>(
+          MaterialPageRoute(builder: (_) => const QrScanPage()),
+        );
+        if (raw != null && raw.isNotEmpty) {
+          await tm.navigateActive(raw);
+        }
       case 'share':
         if (tab != null) {
           final u = tab.url.value;
@@ -182,7 +193,7 @@ class MainToolbar extends StatelessWidget {
           showAboutDialog(
             context: context,
             applicationName: 'Zip Browser',
-            applicationVersion: '0.2.0',
+            applicationVersion: '0.4.0',
             applicationLegalese:
                 '可通过 zip 插件扩展功能与内核\nAndroid: System WebView · Windows: WebView2\n${Platform.operatingSystem}',
           );

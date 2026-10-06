@@ -24,6 +24,7 @@ pubspec.lock
 
 # 打包产物
 *.zip
+*.zbk
 
 # 系统
 .DS_Store

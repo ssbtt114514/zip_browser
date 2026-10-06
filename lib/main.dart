@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:path/path.dart' as p;
 
 import 'app.dart';
@@ -33,6 +35,10 @@ Future<void> main() async {
 
   // 2b. 外观设置
   final appearance = await AppearanceSettings.create();
+
+  // 2b-2. 莫奈动态色板（Android 12+，其他平台返回 null）
+  final CorePalette? monetPalette =
+      await DynamicColorPlugin.getCorePalette();
 
   // 2c. 搜索引擎
   final searchEngines = SearchEnginesService(config);
@@ -111,6 +117,7 @@ Future<void> main() async {
     downloads: downloads,
     uiState: uiState,
     appearance: appearance,
+    monetPalette: monetPalette,
     searchEngines: searchEngines,
     userscriptManager: userscriptManager,
     desktopModePrefs: desktopModePrefs,

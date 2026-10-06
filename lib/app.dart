@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:provider/provider.dart';
 
 import 'core/kernel/kernel_manager.dart';
@@ -29,6 +30,7 @@ class ZipBrowserApp extends StatelessWidget {
   final DownloadsService downloads;
   final BrowserUiState uiState;
   final AppearanceSettings appearance;
+  final CorePalette? monetPalette;
   final SearchEnginesService searchEngines;
   final UserscriptManager userscriptManager;
   final DesktopModePreferences desktopModePrefs;
@@ -46,6 +48,7 @@ class ZipBrowserApp extends StatelessWidget {
     required this.downloads,
     required this.uiState,
     required this.appearance,
+    this.monetPalette,
     required this.searchEngines,
     required this.userscriptManager,
     required this.desktopModePrefs,
@@ -67,6 +70,7 @@ class ZipBrowserApp extends StatelessWidget {
         ChangeNotifierProvider<DownloadsService>.value(value: downloads),
         ChangeNotifierProvider<BrowserUiState>.value(value: uiState),
         ChangeNotifierProvider<AppearanceSettings>.value(value: appearance),
+        Provider<CorePalette?>.value(value: monetPalette),
         ChangeNotifierProvider<SearchEnginesService>.value(value: searchEngines),
         ChangeNotifierProvider<UserscriptManager>.value(value: userscriptManager),
         ChangeNotifierProvider<DesktopModePreferences>.value(

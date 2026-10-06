@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart' hide WebResourceError;
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/bridge/find_script.dart';
 import '../core/bridge/internal_dispatcher.dart';
@@ -82,6 +84,16 @@ class AndroidSystemKernel implements BrowserKernel {
       '${config.bridgeGlobalName}__host',
       onMessageReceived: _onHostMessage,
     );
+    // Android 平台专属设置：媒体无需用户手势即可播放（便于嗅探视频直接播放）
+    if (Platform.isAndroid) {
+      try {
+        final android = controller.platform as AndroidWebViewController;
+        await android.setMediaPlaybackRequiresUserGesture(false);
+        // 允许 https 页面加载 http 子资源，避免页面内容缺失/打不开
+        await android.setMixedContentMode(MixedContentMode.alwaysAllow);
+      } catch (_) {}
+    }
+
     _controller = controller;
   }
 

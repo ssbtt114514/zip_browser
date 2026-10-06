@@ -44,6 +44,23 @@ class SniffedResource {
   }
 }
 
+/// 自动嗅探发现媒体后的提示（供 UI 显示「发现 N 个视频/音频」横幅）
+class SniffHint {
+  final int videoCount;
+  final int audioCount;
+
+  const SniffHint({this.videoCount = 0, this.audioCount = 0});
+
+  int get mediaCount => videoCount + audioCount;
+
+  String get message {
+    final parts = <String>[];
+    if (videoCount > 0) parts.add('$videoCount 个视频');
+    if (audioCount > 0) parts.add('$audioCount 个音频');
+    return '发现 ${parts.join('、')}，点击查看';
+  }
+}
+
 enum SniffType {
   video,
   audio,

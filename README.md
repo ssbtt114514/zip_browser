@@ -7,7 +7,20 @@
   与插件携带的 Fixed Version 固定内核
 - 🚧 **Linux / macOS**：架构已预留（占位内核），后续适配
 - 🔌 插件为标准 **zip**：JS 扩展（DOM/脚本）、原生内核（`.dll/.so`，C ABI）、
-  声明式 UI（按钮/菜单）
+  声明式 UI（按钮/菜单）；独立内核包为 **`.zbk`**
+
+## 功能特性
+
+- 多标签页、前进 / 后退 / 刷新、隐私标签、恢复关闭的标签页
+- 书签、历史记录、下载管理、清除浏览数据
+- **资源嗅探**：自动嗅探页面视频 / 音频 / 图片，顶部浮动提示，可手动开关
+- **资源预览**：图片全屏缩放预览，视频 / 音频直接播放，一键下载
+- **二维码扫描**：扫一扫，识别 URL 直接打开
+- **阅读模式**、无图模式、多组色彩滤镜、字号 / 行距调节
+- 桌面版 UA、页面内查找、长按菜单、分享
+- **莫奈动态取色（Material You）**：Android 12+ 跟随壁纸生成主题，可开关
+- 多搜索引擎、深色 / 浅色主题、自定义外观
+- SVG 应用图标，内核与插件均可热插拔
 
 ---
 
@@ -50,6 +63,10 @@ python tool/pack_plugin.py example_plugins/dark_mode
 
 # FFI 内核示例（需先按指南启用表面插件并编译 dll）
 python tool/pack_plugin.py example_plugins/hello_ffi_kernel
+```
+
+# 独立内核包（.zbk）
+python tool/pack_kernel.py build_kernel_pkg/zb_example_standalone zip_browser_kernel.zbk
 ```
 
 插件内核（让 zip 里的内核显示画面）的完整步骤见
@@ -96,6 +113,10 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：分层架构、内核抽象、
   插件格式、bridge 与安全模型
+- [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md)：功能插件开发（结构、
+  `plugin.json`、`window.zipBrowser` JS API、用户脚本、打包）
+- [docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)：独立内核包 `.zbk` 制作
+- [docs/KERNEL_ABI.md](docs/KERNEL_ABI.md)：原生内核 FFI C ABI（16 个导出符号）
 - [docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)：
   原生表面插件、FFI / Fixed Version 内核集成
 

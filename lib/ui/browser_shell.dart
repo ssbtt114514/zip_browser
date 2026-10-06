@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/sniff/sniff_model.dart';
 import '../core/tab/tab_manager.dart';
 import '../services/ui_state.dart';
 import 'context_menu_sheet.dart';
@@ -59,6 +60,7 @@ class BrowserShell extends StatelessWidget {
               child: Stack(
                 children: [
                   const _ContentArea(),
+                  const _SniffHintBar(),
                   if (uiState.sniffOpen)
                     const Positioned.fill(child: SniffPanel()),
                 ],
@@ -259,6 +261,100 @@ class _ContentArea extends StatelessWidget {
             child: tab.kernel.buildView(),
           ),
       ],
+    );
+  }
+}
+
+/// 自动嗅探提示横幅：发现视频/音频时浮在内容顶部，点击打开嗅探面板
+class _SniffHintBar extends StatefulWidget {
+  const _SniffHintBar();
+
+  @override
+  State<_SniffHintBar> createState() => _SniffHintBarState();
+}
+
+class _SniffHintBarState extends State<_SniffHintBar> {
+  SniffHint? _hint;
+  StreamSubscription? _sub;
+  Timer? _hide;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sub = context.read<TabManager>().sniffHints.listen(_show);
+    });
+  }
+
+  void _show(SniffHint h) {
+    _hide?.cancel();
+    setState(() => _hint = h);
+    _hide = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _hint = null);
+    });
+  }
+
+  void _open() {
+    context.read<BrowserUiState>().openSniff();
+    context.read<TabManager>().active?.kernel.triggerSniff();
+    setState(() => _hint = null);
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _hide?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = _hint;
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      top: 10,
+      left: 12,
+      right: 12,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position:
+                Tween(begin: const Offset(0, -0.6), end: Offset.zero).animate(anim),
+            child: child,
+          ),
+        ),
+        child: h == null
+            ? const SizedBox.shrink(key: ValueKey('empty'))
+            : Material(
+                key: const ValueKey('hint'),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(12),
+                color: scheme.primaryContainer,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _open,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    child: Row(children: [
+                      Icon(Icons.satellite_alt,
+                          size: 19, color: scheme.onPrimaryContainer),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(h.message,
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: scheme.onPrimaryContainer)),
+                      ),
+                      Icon(Icons.chevron_right,
+                          size: 20, color: scheme.onPrimaryContainer),
+                    ]),
+                  ),
+                ),
+              ),
+      ),
     );
   }
 }

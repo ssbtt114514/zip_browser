@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_keys.dart';
@@ -14,6 +15,7 @@ class ThemeBuilder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppearanceSettings>();
+    final monet = context.watch<CorePalette?>();
     return _InheritedTheme(
       settings: s,
       child: Builder(
@@ -23,8 +25,8 @@ class ThemeBuilder extends StatelessWidget {
             navigatorKey: navigatorKey,
             scaffoldMessengerKey: messengerKey,
             debugShowCheckedModeBanner: false,
-            theme: ThemeEngine.light(s),
-            darkTheme: ThemeEngine.dark(s),
+            theme: ThemeEngine.light(s, monet: monet),
+            darkTheme: ThemeEngine.dark(s, monet: monet),
             themeMode: s.flutterThemeMode,
             home: child,
           );

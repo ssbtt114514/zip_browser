@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/sniff/sniff_model.dart';
 import '../../core/tab/tab_manager.dart';
 import '../../services/ui_state.dart';
+import 'resource_preview_page.dart';
 
 /// 资源嗅探面板：展示当前页面嗅探到的媒体/资源，支持下载与复制链接。
 class SniffPanel extends StatefulWidget {
@@ -92,6 +93,22 @@ class _SniffPanelState extends State<SniffPanel> {
                           style: TextStyle(
                               fontSize: 12, color: Colors.grey.shade600)),
                     IconButton(
+                      icon: Icon(
+                        tm.config.autoSniff
+                            ? Icons.travel_explore
+                            : Icons.travel_explore_outlined,
+                        size: 19,
+                        color: tm.config.autoSniff
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      tooltip: tm.config.autoSniff
+                          ? '自动嗅探：开（点击关闭）'
+                          : '自动嗅探：关（点击开启）',
+                      onPressed: () =>
+                          tm.config.setAutoSniff(!tm.config.autoSniff),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.refresh, size: 18),
                       tooltip: '重新扫描',
                       onPressed: () {
@@ -123,6 +140,7 @@ class _SniffPanelState extends State<SniffPanel> {
                               for (final r in grouped[type]!)
                                 _ResourceTile(
                                   resource: r,
+                                  onPreview: () => _preview(r),
                                   onDownload: () {
                                     tm.downloadRunner.start(
                                       r.url,
@@ -161,6 +179,18 @@ class _SniffPanelState extends State<SniffPanel> {
     final seg = r.url.split('?').first.split('#').last.split('/').last;
     return seg.isEmpty ? r.url : seg;
   }
+
+  /// 预览资源：图片进入全屏预览页；视频/音频在新标签用系统内核播放
+  void _preview(SniffedResource r) {
+    if (r.type == SniffType.image) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ResourcePreviewPage(url: r.url)),
+      );
+    } else {
+      context.read<TabManager>().createTab(url: r.url);
+      context.read<BrowserUiState>().closeSniff();
+    }
+  }
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -189,17 +219,45 @@ class _SectionHeader extends StatelessWidget {
 
 class _ResourceTile extends StatelessWidget {
   final SniffedResource resource;
+  final VoidCallback onPreview;
   final VoidCallback onDownload;
 
-  const _ResourceTile({required this.resource, required this.onDownload});
+  const _ResourceTile({
+    required this.resource,
+    required this.onPreview,
+    required this.onDownload,
+  });
+
+  Widget _leading(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    if (resource.type == SniffType.image) {
+      // 图片直接显示缩略图
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.network(
+          resource.url,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              Icon(_iconFor(resource.type), size: 22, color: primary),
+          loadingBuilder: (_, child, p) =>
+              p == null ? child : SizedBox(width: 44, height: 44, child: Icon(Icons.image_outlined, size: 22, color: primary)),
+        ),
+      );
+    }
+    return Icon(_iconFor(resource.type), size: 22, color: primary);
+  }
 
   @override
   Widget build(BuildContext context) {
     final name = _filename(resource.url);
+    final isMedia = resource.type == SniffType.video ||
+        resource.type == SniffType.audio;
     return ListTile(
       dense: true,
-      leading: Icon(_iconFor(resource.type),
-          size: 20, color: Theme.of(context).colorScheme.primary),
+      onTap: onPreview,
+      leading: _leading(context),
       title: Text(name,
           maxLines: 1, overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 13)),
@@ -210,6 +268,15 @@ class _ResourceTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            icon: Icon(
+              isMedia ? Icons.play_circle_outline : Icons.visibility_outlined,
+              size: 19,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            tooltip: isMedia ? '播放预览' : '预览',
+            onPressed: onPreview,
+          ),
           IconButton(
             icon: const Icon(Icons.copy, size: 17),
             tooltip: '复制链接',

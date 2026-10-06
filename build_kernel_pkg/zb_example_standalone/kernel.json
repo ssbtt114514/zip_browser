@@ -1,0 +1,21 @@
+{
+  "manifest_version": 1,
+  "id": "com.example.kernel.standalone",
+  "name": "示例独立内核",
+  "display_name": "示例软件渲染内核（.zbk）",
+  "version": "1.0.0",
+  "engine": "custom",
+  "type": "ffi",
+  "abi_version": 1,
+  "description": "零依赖软件渲染示例内核，演示 .zbk 独立内核包的安装、探测、切换与卸载。",
+  "engine_version": "demo-1.0.0",
+  "capabilities": ["loadUrl", "evaluateJs", "userScripts", "multiTab", "download"],
+  "libraries": {
+    "windows": "bin/windows/zb_example_kernel.dll",
+    "android": {
+      "arm64-v8a": "bin/android/arm64-v8a/libzb_example_kernel.so",
+      "armeabi-v7a": "bin/android/armeabi-v7a/libzb_example_kernel.so",
+      "x86_64": "bin/android/x86_64/libzb_example_kernel.so"
+    }
+  }
+}

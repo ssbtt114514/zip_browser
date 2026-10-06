@@ -16,6 +16,7 @@ import '../constants.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
 import '../plugin/plugin_manager.dart';
+import '../sniff/sniff_model.dart';
 import '../script/userscript_manager.dart';
 import '../theme/appearance_settings.dart';
 import 'home_page.dart';
@@ -61,6 +62,16 @@ class TabManager extends ChangeNotifier {
   /// 扩展通过 bridge 触发的通知（供 UI 以 SnackBar 呈现）
   final _notificationCtrl = StreamController<String>.broadcast();
   Stream<String> get extensionNotifications => _notificationCtrl.stream;
+
+  /// 自动嗅探发现媒体后的提示横幅
+  final _sniffHintCtrl = StreamController<SniffHint>.broadcast();
+  Stream<SniffHint> get sniffHints => _sniffHintCtrl.stream;
+
+  /// 每个标签累积的嗅探资源（url 去重）
+  final Map<String, Map<String, SniffedResource>> _sniffAcc = {};
+
+  /// 每个标签本次导航是否已发过提示
+  final Map<String, bool> _sniffHinted = {};
 
   /// 供 host bridge 推送扩展通知
   void notifyExtension(String message) => _notificationCtrl.add(message);
@@ -251,12 +262,24 @@ class TabManager extends ChangeNotifier {
         }
         // 应用网页增强（阅读/滤镜/无图/字号）
         await webEnhance?.applyTo(tab.kernel);
+        // 自动资源嗅探：稍等资源上报后汇总，发现媒体则提示
+        if (config.autoSniff) _scheduleSniffHint(tab);
         // 通知工具栏刷新前进/后退可用状态
         notifyListeners();
       }
       if (event.stage == NavigationStage.start) {
         tab.isLoading.value = true;
+        // 新一次导航：重置嗅探累积与提示标记
+        _sniffAcc[tab.id] = {};
+        _sniffHinted[tab.id] = false;
         notifyListeners();
+      }
+    });
+    // 资源嗅探：累积当前标签发现的资源（url 去重）
+    tab.kernel.sniffedResources.listen((list) {
+      final acc = _sniffAcc.putIfAbsent(tab.id, () => {});
+      for (final r in list) {
+        acc.putIfAbsent(r.url, () => r);
       }
     });
     tab.kernel.resourceErrors.listen((_) => tab.isLoading.value = false);
@@ -265,6 +288,21 @@ class TabManager extends ChangeNotifier {
     // 用户脚本检测：转发给 UI 提示安装
     tab.kernel.userscriptDetected.listen((url) {
       _userscriptRequestCtrl.add(url);
+    });
+  }
+
+  /// 页面加载完成后延迟汇总嗅探结果，发现视频/音频则发出提示横幅
+  void _scheduleSniffHint(TabModel tab) {
+    Future.delayed(const Duration(milliseconds: 1300), () {
+      if (!_tabs.contains(tab)) return;
+      if (_sniffHinted[tab.id] == true) return;
+      final acc = _sniffAcc[tab.id] ?? const <String, SniffedResource>{};
+      final videos = acc.values.where((r) => r.type == SniffType.video).length;
+      final audios = acc.values.where((r) => r.type == SniffType.audio).length;
+      if (videos + audios > 0) {
+        _sniffHinted[tab.id] = true;
+        _sniffHintCtrl.add(SniffHint(videoCount: videos, audioCount: audios));
+      }
     });
   }
 
@@ -320,6 +358,8 @@ class TabManager extends ChangeNotifier {
     final idx = _tabs.indexWhere((t) => t.id == id);
     if (idx < 0) return;
     final removed = _tabs.removeAt(idx);
+    _sniffAcc.remove(id);
+    _sniffHinted.remove(id);
 
     // 记录到「最近关闭」，供恢复
     _closedTabs.add(_ClosedTab(
@@ -400,6 +440,7 @@ class TabManager extends ChangeNotifier {
   void dispose() {
     _userscriptRequestCtrl.close();
     _notificationCtrl.close();
+    _sniffHintCtrl.close();
     super.dispose();
   }
 }

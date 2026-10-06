@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,6 +21,7 @@ class AppearanceSettings extends ChangeNotifier {
   static const String _kBgColor = 'appearance.home_bg_color';
   static const String _kBgImage = 'appearance.home_bg_image';
   static const String _kTrueBlack = 'appearance.true_black';
+  static const String _kMonet = 'appearance.monet';
 
   final SharedPreferences _prefs;
 
@@ -168,6 +168,14 @@ class AppearanceSettings extends ChangeNotifier {
 
   Future<void> setTrueBlack(bool value) async {
     await _prefs.setBool(_kTrueBlack, value);
+    notifyListeners();
+  }
+
+  // —— 莫奈动态取色（Android 12+，其他平台自动回退到 seed 色）——
+  bool get monetEnabled => _prefs.getBool(_kMonet) ?? true;
+
+  Future<void> setMonetEnabled(bool value) async {
+    await _prefs.setBool(_kMonet, value);
     notifyListeners();
   }
 

@@ -16,6 +16,7 @@ class ConfigService {
   static const _kWebEnhance = 'browser.web_enhance';
   static const _kHomeShortcuts = 'home.shortcut_count';
   static const _kHomeRecent = 'home.show_recent';
+  static const _kAutoSniff = 'sniff.auto';
 
   final SharedPreferences _prefs;
 
@@ -86,4 +87,9 @@ class ConfigService {
   bool get homeShowRecent => _prefs.getBool(_kHomeRecent) ?? true;
   Future<void> setHomeShowRecent(bool value) =>
       _prefs.setBool(_kHomeRecent, value);
+
+  /// 自动资源嗅探：页面加载后自动检测媒体并提示
+  bool get autoSniff => _prefs.getBool(_kAutoSniff) ?? true;
+  Future<void> setAutoSniff(bool value) =>
+      _prefs.setBool(_kAutoSniff, value);
 }

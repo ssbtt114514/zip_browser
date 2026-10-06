@@ -35,6 +35,18 @@ class AppearancePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          // —— 动态取色（莫奈 / Material You）——
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.auto_awesome),
+              title: const Text('动态取色（Material You）'),
+              subtitle: const Text('Android 12+ 跟随壁纸生成主题色，其他系统自动回退到主色调'),
+              value: s.monetEnabled,
+              onChanged: s.setMonetEnabled,
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // —— 主色调 ——
           const _SectionTitle('主色调'),
           Card(
