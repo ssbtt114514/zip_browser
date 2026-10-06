@@ -77,14 +77,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: android-actions/setup-android@v3
-
+      # ubuntu-latest 已预装 Android SDK（ANDROID_SDK_ROOT），直接用它自带的
+      # sdkmanager 安装 NDK 即可（android-actions/setup-android 在新版 runner 上会失败）。
       - name: Install NDK
-        run: sdkmanager --install "ndk;28.2.13676358" > /dev/null
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
+          "$SDKMANAGER" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          ls "$SDK/ndk"
 
       - name: Compile kernel shared library (${{ matrix.abi }})
         run: |
-          NDK="$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+          NDK="$ANDROID_NDK"
           CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.triple }}24-clang"
           OUT="$KERNEL_DIR/kernels/android/${{ matrix.abi }}"
           mkdir -p "$OUT"
@@ -96,7 +101,7 @@ jobs:
 
       - name: Verify exported symbols
         run: |
-          NDK="$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+          NDK="$ANDROID_NDK"
           NM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
           SO="$KERNEL_DIR/kernels/android/${{ matrix.abi }}/libzb_example_kernel.so"
           "$NM" -D --defined-only "$SO" | grep -c ' T zb_' || true
