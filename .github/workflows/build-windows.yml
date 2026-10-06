@@ -1,24 +1,129 @@
 name: build-windows
 
 # Windows 桌面版必须在 Windows 主机上构建（Flutter 不支持在 Linux 交叉编译），
-# 因此通过 GitHub Actions 的 windows-latest 运行器产出 exe 包。
-# 注意：仓库 .gitignore 忽略了根目录下的 windows/（由 flutter create 生成），
-#       因此 CI 必须先执行 flutter create 生成 windows 工程骨架。
+# 因此通过 GitHub Actions 的 windows-latest 运行器产出可直接分发的 zip 包。
+#
+# 本工作流做四件事：
+#   1. 静态检查与单元测试（analyze 必须 0 error / 0 warning，test 必须全绿）
+#   2. 生成被 .gitignore 忽略的 windows/ 工程骨架并集成 native surface 插件
+#   3. 编译宿主所需的两类原生产物并校验 ABI 导出符号：
+#        - native surface 插件（随 runner 编译，负责 FFI 内核的帧上屏）
+#        - 插件内核 DLL（zb_lite_kernel 等，供「内核管理」安装）
+#   4. 打包成 zip 并（打 tag 时）创建 GitHub Release
 on:
   workflow_dispatch:
+    inputs:
+      flutter_version:
+        description: 'Flutter SDK 版本'
+        required: false
+        default: '3.47.6'
+      build_kernels:
+        description: '是否一并编译插件内核 DLL'
+        type: boolean
+        required: false
+        default: true
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+    paths:
+      - 'lib/**'
+      - 'native_plugins/**'
+      - 'native_kernels/**'
+      - 'example_plugins/**'
+      - 'tool/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'native_plugins/**'
+      - 'native_kernels/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-windows.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: ${{ github.event.inputs.flutter_version || '3.47.6' }}
+  # webview_windows 仍在用 /await 时代的实验性协程头，最新 MSVC（VS 18）已把
+  # STL1011 升级为硬错误。cl.exe 会把 CL 环境变量的内容前置到命令行，
+  # 借此给所有编译单元注入官方静默宏以恢复可编译。
+  CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 
 jobs:
-  windows:
+  # ---------------------------------------------------------------
+  # 1) 静态检查 + 单元测试（唯一的质量闸门，后续 job 依赖它）
+  # ---------------------------------------------------------------
+  analyze:
+    name: Analyze & Test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.47.6
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Generate Windows platform files
+        run: flutter create --platforms=windows --org com.zipbrowser --project-name zip_browser .
+
+      # flutter create 会补齐模板自带的 test/widget_test.dart（其中引用模板类
+      # MyApp，本项目并不存在），若不删除，随后的 analyze / test 都会因编译错误
+      # 直接失败。该文件由工具生成、不入库，这里显式移除。
+      - name: Remove template widget test
+        shell: pwsh
+        run: |
+          if (Test-Path test/widget_test.dart) {
+            Remove-Item -Force test/widget_test.dart
+            Write-Host "已移除模板测试 test/widget_test.dart"
+          }
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      # flutter analyze 只要发现任何 issue（含 info）就会返回非 0，
+      # 而仓库里第三方包的 deprecation 提示不受我们控制，因此这里显式
+      # 区分 severity：error / warning 必须为 0，info 允许存在。
+      - name: Static analysis
+        shell: pwsh
+        run: |
+          $out = & flutter analyze 2>&1 | Out-String
+          Write-Host $out
+          $bad = ($out -split "`n") | Where-Object { $_ -match '^\s*(error|warning)\s+-' }
+          if ($bad) {
+            Write-Host "::error::静态检查存在 error / warning 级问题"
+            $bad | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
+          Write-Host "静态检查通过：0 error / 0 warning"
+
+      - name: Unit tests
+        run: flutter test --reporter expanded
+
+  # ---------------------------------------------------------------
+  # 2) 构建 Windows 桌面版（含内核 DLL）并打包
+  #    内核 DLL 与 App 放在同一个 job 内构建，避免跨 job 的 artifact
+  #    依赖：一旦上游 job 因条件被 skip，needs 会把下游 job 一起 skip。
+  # ---------------------------------------------------------------
+  windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    needs: [analyze]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -34,17 +139,103 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      # webview_windows 尚未迁移到 C++20 协程，仍在用 /await 时代的实验性协程头，
-      # runner 上最新 MSVC（VS 18）已把 STL1011 升级为硬错误。cl.exe 会把 CL 环境
-      # 变量的内容前置到命令行，借此给所有编译单元注入官方静默宏以恢复可编译。
+      # —— 插件内核 DLL（可选；供「内核管理」安装）——
+      - name: Set up MSVC
+        if: github.event_name != 'pull_request' && github.event.inputs.build_kernels != 'false'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Show toolchain
+        if: github.event_name != 'pull_request' && github.event.inputs.build_kernels != 'false'
+        shell: cmd
+        run: where cl
+
+      - name: Build zb_lite_kernel DLL
+        if: github.event_name != 'pull_request' && github.event.inputs.build_kernels != 'false' && hashFiles('tool/build_lite_kernel.bat') != ''
+        shell: cmd
+        run: tool\build_lite_kernel.bat
+
+      - name: Build zb_example_kernel DLL
+        if: github.event_name != 'pull_request' && hashFiles('tool/build_example_kernel.bat') != ''
+        shell: cmd
+        run: tool\build_example_kernel.bat
+
+      - name: Verify kernel DLL exports (16 ABI symbols)
+        if: github.event_name != 'pull_request' && github.event.inputs.build_kernels != 'false'
+        shell: pwsh
+        run: |
+          $required = @(
+            'zb_abi_version','zb_kernel_create','zb_kernel_destroy',
+            'zb_kernel_name','zb_kernel_version',
+            'zb_kernel_load_url','zb_kernel_go_back','zb_kernel_go_forward',
+            'zb_kernel_reload','zb_kernel_eval_js',
+            'zb_kernel_current_url','zb_kernel_title',
+            'zb_kernel_attach_surface','zb_kernel_tick',
+            'zb_kernel_dispatch_from_host','zb_free_ptr'
+          )
+          $dlls = Get-ChildItem -Recurse -Path example_plugins -Filter '*.dll' |
+                  Where-Object { $_.FullName -match 'kernels\\windows' }
+          if (-not $dlls) { throw "没有找到任何已编译的内核 DLL" }
+
+          foreach ($dll in $dlls) {
+            $text = (& dumpbin /nologo /exports $dll.FullName) -join "`n"
+            $missing = $required | Where-Object { $text -notmatch [regex]::Escape($_) }
+            if ($missing) {
+              throw "$($dll.Name) 缺少导出符号：$($missing -join ', ')"
+            }
+            Write-Host ("OK  {0}  {1:N0} 字节  16/16 符号" -f $dll.Name, $dll.Length)
+          }
+
+      # —— App 本体 ——
       - name: Build Windows release
-        env:
-          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: flutter build windows --release
 
-      - name: Upload artifact
+      - name: Locate build output
+        id: out
+        shell: pwsh
+        run: |
+          $dir = 'build/windows/x64/runner/Release'
+          if (-not (Test-Path $dir)) { throw "未找到构建输出目录：$dir" }
+          $exe = Join-Path $dir 'zip_browser.exe'
+          if (-not (Test-Path $exe)) { throw "未找到可执行文件：$exe" }
+          Get-ChildItem $dir -Recurse -File |
+            Measure-Object -Property Length -Sum |
+            ForEach-Object { Write-Host ("Release：{0:N1} MB / {1} 个文件" -f ($_.Sum/1MB), $_.Count) }
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: Package release archive
+        shell: pwsh
+        run: |
+          $out = '${{ steps.out.outputs.dir }}'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          # 1) 应用本体
+          Compress-Archive -Path "$out/*" -DestinationPath dist/zip-browser-windows-x64.zip -Force
+
+          # 2) 若本地产出了内核 DLL，把每个内核插件目录也打成可直接安装的 zip
+          foreach ($p in @('example_plugins/lite_kernel', 'example_plugins/hello_ffi_kernel')) {
+            if (-not (Test-Path "$p/manifest.json")) { continue }
+            $name = Split-Path $p -Leaf
+            Compress-Archive -Path "$p/*" -DestinationPath "dist/$name-plugin.zip" -Force
+            Write-Host "打包插件：dist/$name-plugin.zip"
+          }
+
+          Get-ChildItem dist | ForEach-Object {
+            Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
+          }
+
+      - name: Upload Windows archive
         uses: actions/upload-artifact@v4
         with:
           name: zip-browser-windows-x64
-          path: build/windows/x64/runner/Release/
+          path: dist/*.zip
           if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: false
