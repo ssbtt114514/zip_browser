@@ -33,6 +33,9 @@ on:
       - 'tool/pack_plugin.py'
       - 'tool/pack_kernel.py'
       - 'tool/assemble_kernel_pkg.py'
+      - 'tool/fetch_webview2_runtime.py'
+      - 'tool/assemble_chromium_kernel.py'
+      - 'docs/KERNEL_CHROMIUM.md'
       - '.github/workflows/build-kernel.yml'
   pull_request:
     paths:
@@ -42,6 +45,8 @@ on:
       - 'tool/build_lite_kernel.bat'
       - 'tool/pack_common.py'
       - 'tool/assemble_kernel_pkg.py'
+      - 'tool/fetch_webview2_runtime.py'
+      - 'tool/assemble_chromium_kernel.py'
       - '.github/workflows/build-kernel.yml'
 
 env:
@@ -287,12 +292,83 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------
+  # 3b) Chromium 固定版本内核包（zb_chromium_kernel.zbk）
+  #
+  #     这是唯一一个**不需要编译**、也不需要 needs 上游作业的内核包：原料是 NuGet 上
+  #     的 WebView2 Fixed Version 运行时，纯下载 + 装配 + 打包，因此与 runner 架构无关，
+  #     用 ubuntu-latest 最省。刻意不依赖 selftest/各平台作业：固定版本运行时包不该被
+  #     C 编译或 Android NDK 的波动拖累，上游失败时这里仍要能独立产出可诊断的日志。
+  #
+  #     体积提示：运行时约 174 MiB，产物约 150-200 MB。artifact 由 upload-artifact
+  #     自动 zip（默认 compression-level 6），所以这里只上传最终的 .zbk，解包出来的
+  #     runtime/ 目录不上传（需要时重新 fetch 即可，比多传 170 MiB 划算得多）。
+  #
+  #     --strict-runtime 是硬闸门：它会额外要求包内 runtime 总体积 ≥ 20 MiB，
+  #     从而挡住本地验证用的「桩 msedgewebview2.exe」混进正式产物。
+  # ---------------------------------------------------------------
+  chromium-kernel:
+    name: Chromium fixed-version kernel (.zbk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # tool/verify_packages.dart 需要 Dart；用与 build-android-apk 相同的 Flutter 版本，
+      # 避免 dart 工具链版本与 pubspec 约束漂移。
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Show python / dart versions
+        run: |
+          python3 --version
+          dart --version
+
+      # 先只发现不下载：万一 NuGet 改名/限流，这一步的日志就能直接看出是哪一环有问题
+      # （脚本会打印 10 个候选 id 的探测结果、命中的包、版本、直链与体积）。
+      - name: Discover WebView2 fixed-version runtime
+        run: python3 tool/fetch_webview2_runtime.py --out "$RUNNER_TEMP/wv2" --arch x64 --dry-run
+
+      - name: Fetch WebView2 fixed-version runtime
+        run: python3 tool/fetch_webview2_runtime.py --out "$RUNNER_TEMP/wv2" --arch x64
+
+      - name: Assemble kernel package
+        run: |
+          python3 tool/assemble_chromium_kernel.py --runtime "$RUNNER_TEMP/wv2"
+          echo "::group::装配后的包目录"
+          find build_kernel_pkg/zb_chromium_kernel -maxdepth 1 | sort
+          du -sh build_kernel_pkg/zb_chromium_kernel/runtime
+          echo "::endgroup::"
+
+      - name: Pack .zbk
+        run: python3 tool/pack_kernel.py build_kernel_pkg/zb_chromium_kernel zb_chromium_kernel.zbk
+
+      - name: Verify with the host installer (strict runtime)
+        run: |
+          ls -l zb_chromium_kernel.zbk
+          size=$(stat -c%s zb_chromium_kernel.zbk)
+          echo "zbk 体积：$size 字节"
+          if [ "$size" -lt 20000000 ]; then
+            echo "::error::.zbk 只有 $size 字节，运行时显然没被装进去（预期 100MB 级）"
+            exit 1
+          fi
+          dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
+
+      - name: Upload chromium kernel package
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-chromium-zbk
+          path: zb_chromium_kernel.zbk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
   # 4) 汇总：把各平台产物放回 manifest 声明的路径，再打包成插件 zip / .zbk
   # ---------------------------------------------------------------
   package:
     name: Package plugin zips
     runs-on: ubuntu-latest
-    needs: [windows-dll, android-so, linux-so]
+    needs: [windows-dll, android-so, linux-so, chromium-kernel]
     # 标签推送时要把包挂到 release 上，需要写权限（GITHUB_TOKEN 默认为只读）
     permissions:
       contents: write
@@ -303,6 +379,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          # 汇总作业已经被 needs 保证在 chromium-kernel 之后运行，但产物名写错/被改名时
+          # 不该让整个打包作业倒在这里；缺了就在下面单列一条警告，并明确列出少了什么。
+          pattern: kernel-*
+          merge-multiple: false
 
       - name: Assemble plugin directories
         run: |
@@ -311,6 +391,15 @@ jobs:
           echo "::group::下载到的产物布局"
           find dist -type f | sort
           echo "::endgroup::"
+
+          # 内核包里体积最大、也最容易被上游悄悄弄丢的就是 Chromium 固定版本内核包：
+          # 单独把它的落点和体积打出来，失败时一眼能看出是"产物没上传"还是"上传了但空"。
+          CHROMIUM_ZBK="$(find dist/kernel-chromium-zbk -type f -name '*.zbk' -print -quit 2>/dev/null || true)"
+          if [ -n "$CHROMIUM_ZBK" ]; then
+            echo "Chromium 固定版本内核包：$CHROMIUM_ZBK（$(stat -c%s "$CHROMIUM_ZBK") 字节）"
+          else
+            echo "::warning::没有拿到 kernel-chromium-zbk 产物，release 将缺少 zb_chromium_kernel.zbk"
+          fi
 
           # 注意：upload-artifact@v4 对多路径上传会保留「相对于最小公共父目录」的
           # 路径（例如 lite_kernel/kernels/windows/zb_lite_kernel.dll），
@@ -416,6 +505,48 @@ jobs:
             echo "未找到 build_kernel_pkg/zb_lite_kernel，跳过"
           fi
 
+          # 把上游产出的 Chromium 固定版本内核包搬到工作区根目录：release 步骤用的是
+          # `*.zbk` 通配符，只有落在根目录且名字以 .zbk 结尾才会被挂上去。
+          CHROMIUM_ZBK="$(find dist/kernel-chromium-zbk -type f -name 'zb_chromium_kernel.zbk' -print -quit 2>/dev/null || true)"
+          if [ -z "$CHROMIUM_ZBK" ]; then
+            # 本作业 needs 了 chromium-kernel，正常路径下一定拿得到；
+            # 拿不到就说明产物名/上传环节被改坏了，必须硬失败 ——
+            # 否则 release 会静默少一个内核包（本仓库踩过「清单声明了、包里却没有」的坑）。
+            echo "::error::dist 里没有 zb_chromium_kernel.zbk，release 会缺少 Chromium 内核包"
+            exit 1
+          fi
+          cp "$CHROMIUM_ZBK" zb_chromium_kernel.zbk
+          echo "已就位：zb_chromium_kernel.zbk（$(stat -c%s zb_chromium_kernel.zbk) 字节）"
+
+      # Gecko 引擎适配包：engine_adapter 不携带任何平台产物，包内只有
+      # kernel.json 与 README，因此这一步不依赖任何编译产物，必须能稳定产出。
+      - name: Pack gecko adapter package (.zbk)
+        run: |
+          test -f build_kernel_pkg/zb_gecko_kernel/kernel.json || {
+            echo "::error::缺少 build_kernel_pkg/zb_gecko_kernel/kernel.json"; exit 1; }
+          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel zb_gecko_kernel.zbk
+          ls -l zb_gecko_kernel.zbk
+
+      # 用宿主自己的安装器逐个校验内核包。tool/verify_packages.dart 已按内核类型分派：
+      #   - ffi 内核：逐个核对清单声明的平台/ABI 库文件是否真实存在；
+      #   - webview2_fixed：强制 runtime_dir 内必须有 msedgewebview2.exe。
+      # 显式写平台断言而不是依赖脚本内部的默认期望值：包是"声明了什么就必须有什么"，
+      # 这里把 lite 内核应有的 5 个平台/ABI 明写出来，清单少填一个平台也不会蒙混过关。
+      - name: Verify lite kernel package (5 platforms)
+        run: |
+          dart run tool/verify_packages.dart \
+            --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
+            zb_lite_kernel.zbk
+
+      # --strict-runtime 会额外要求运行时 ≥ 20 MiB：这是挡住"桩运行时"混进 release 的闸门。
+      # 不加 if 守卫：上一步已保证文件就位，缺文件就该失败，不能静默跳过。
+      - name: Verify chromium kernel package (strict runtime)
+        run: dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
+
+      # Gecko 适配包：engine_adapter 不携带平台产物，断言全平台可用。
+      - name: Verify gecko adapter package
+        run: dart run tool/verify_packages.dart zb_gecko_kernel.zbk
+
       - name: Upload plugin packages
         uses: actions/upload-artifact@v4
         with:
@@ -424,11 +555,16 @@ jobs:
             lite_kernel.zip
             hello_ffi_kernel.zip
             *.zbk
-          if-no-files-found: warn
+          if-no-files-found: error
 
       # 标签推送（v*）时把完整的多平台包挂到 release 上。
       # 不设置 generate_release_notes：发布说明由 build-windows 那边生成或人工撰写，
       # 这里只补文件，避免把人工写的说明覆盖成自动生成的内容。
+      #
+      # 逐个列名而不是只写 `*.zbk`：一是让"本作业负责哪 5 个包"一眼可见，
+      # 二是显式列出 zb_chromium_kernel.zbk（Chromium 固定版本内核，约 100MB）
+      # 与 zb_gecko_kernel.zbk（Gecko 引擎适配包，几十 KB）；
+      # fail_on_unmatched_files: false 保证某个包没产出时其余包照常发布。
       - name: Attach packages to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -436,5 +572,7 @@ jobs:
           files: |
             lite_kernel.zip
             hello_ffi_kernel.zip
-            *.zbk
+            zb_lite_kernel.zbk
+            zb_chromium_kernel.zbk
+            zb_gecko_kernel.zbk
           fail_on_unmatched_files: false

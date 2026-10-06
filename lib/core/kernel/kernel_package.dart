@@ -67,7 +67,11 @@ class InstalledKernel {
   }
 
   /// 在指定平台上是否可用（声明且产物存在）
+  ///
+  /// `engine_adapter` 不携带平台产物，在所有平台都返回 true：能否真正渲染
+  /// 由运行时的引擎探测结果决定，本方法只回答"能不能装/能不能选"。
   bool availableOn(String platform, {String? abi}) {
+    if (manifest.type == 'engine_adapter') return true;
     if (manifest.type == 'webview2_fixed') {
       return platform == 'windows' && runtimeDirPath != null;
     }
@@ -184,7 +188,11 @@ class KernelPackage {
           '内核 ABI 版本 ${manifest.abiVersion} 与宿主支持的 $kSupportedKernelAbiVersion 不匹配',
         );
       }
-      if (manifest.libraries.isEmpty &&
+      // engine_adapter 是适配器：不携带 libraries / runtime_dir 属正常情况，
+      // 其余类型仍必须声明至少一项平台产物。
+      final adapter = manifest.type == 'engine_adapter';
+      if (!adapter &&
+          manifest.libraries.isEmpty &&
           !(manifest.type == 'webview2_fixed' &&
               (manifest.runtimeDir?.isNotEmpty ?? false))) {
         errors.add('清单未声明任何平台产物（libraries / runtime_dir 均为空）');

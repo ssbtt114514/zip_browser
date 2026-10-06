@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../platform/android_system_kernel.dart';
+import '../../platform/engine_adapter_kernel.dart';
 import '../../platform/linux_webkit_kernel.dart';
 import '../../platform/plugin_ffi_kernel.dart';
 import '../../platform/stub_kernel.dart';
@@ -34,6 +35,11 @@ class KernelDescriptor {
   /// 独立内核包 id（origin == standalone 时非空）
   final String? packageId;
 
+  /// 内核包加载方式（清单 `type`：ffi / webview2_fixed / engine_adapter）
+  ///
+  /// UI 用它区分文案（如引擎适配包必须如实标注"不提供渲染"）。
+  final String? packageType;
+
   /// 独立内核包占用字节数
   final int? sizeBytes;
 
@@ -50,6 +56,7 @@ class KernelDescriptor {
     this.available = true,
     this.capabilities = const {},
     this.packageId,
+    this.packageType,
     this.sizeBytes,
     this.unavailableReason,
   });
@@ -121,6 +128,7 @@ class KernelRegistry {
           available: ok,
           capabilities: pkg.manifest.capabilitySet,
           packageId: pkg.id,
+          packageType: pkg.manifest.type,
           sizeBytes: pkg.sizeBytes,
           note: pkg.manifest.description,
           unavailableReason: pkg.isTampered
@@ -142,6 +150,7 @@ class KernelRegistry {
         engine: isFixed ? KernelEngine.chromium : KernelEngine.custom,
         available: true,
         capabilities: offer.capabilities,
+        packageType: offer.spec.type,
         note: isFixed
             ? '插件携带的 WebView2 Fixed Version 固定内核'
             : '插件 FFI 原生内核（ABI v${offer.spec.abiVersion}）',
@@ -231,6 +240,13 @@ class KernelRegistry {
         final offer = StandaloneKernelOffer(pkg);
         if (offer.type == 'webview2_fixed' && offer.runtimeDir != null) {
           return WindowsSystemKernel(fixedRuntimeDir: offer.runtimeDir);
+        }
+        // 引擎适配包：不携带渲染库，返回诚实的探测内核（不渲染网页）
+        if (offer.type == 'engine_adapter') {
+          return EngineAdapterKernel(
+            source: offer,
+            engine: pkg.manifest.engine,
+          );
         }
         return FfiBrowserKernel(source: offer);
       }

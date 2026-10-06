@@ -1,0 +1,121 @@
+name: build-linux
+
+# 构建 Linux 桌面版（Flutter Linux desktop，x86_64）并打包成 tar.gz。
+# Flutter 不支持交叉编译桌面版：Linux 产物只能在 Linux 主机上构建，
+# 因此这里用 ubuntu-latest 运行器。
+#
+# 依赖说明：Linux 桌面版需要 GTK3 开发库与 clang/cmake/ninja；
+# libstdc++-12-dev 在 ubuntu-24.04 上是 Flutter 官方文档要求的包，
+# 在更老的镜像里可能不存在，故用 `|| true` 容忍（缺失时不影响编译）。
+#
+# 触发条件与 build-android-apk 一致：main 推送（尽早暴露问题）、v* tag（挂 Release）、手动。
+# 刻意不加 paths 过滤：paths 与 branches/tags 在 Actions 里是「与」关系，
+# 同时写上会让 main 推送永远匹配不上。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Build Linux x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev
+          sudo apt-get install -y libstdc++-12-dev || true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Generate Linux platform files
+        run: flutter create --platforms=linux --org com.zipbrowser --project-name zip_browser .
+
+      # flutter create 会补齐模板自带的 test/widget_test.dart（引用模板类 MyApp，
+      # 本项目并不存在），不删掉会让 analyze / test 直接编译失败。
+      - name: Remove template widget test
+        run: rm -f test/widget_test.dart
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      # 在 Linux 上再跑一遍单元测试：其中包含依赖 Platform.isLinux 的分支，
+      # Windows 运行器上跑不到。
+      - name: Unit tests
+        run: flutter test --reporter expanded
+
+      - name: Build Linux release
+        run: flutter build linux --release
+
+      - name: Package tar.gz
+        run: |
+          set -euo pipefail
+          bundle=build/linux/x64/release/bundle
+          test -d "$bundle" || { echo "::error::未找到 $bundle"; exit 1; }
+          test -x "$bundle/zip_browser" || { echo "::error::未找到可执行文件 $bundle/zip_browser"; exit 1; }
+          mkdir -p dist
+          # 顶层放一个 zip_browser/ 目录，解包后不会把文件撒在当前目录里
+          tar -czf dist/zip-browser-linux-x64.tar.gz -C "$(dirname "$bundle")" "$(basename "$bundle")"
+          ls -l dist
+
+      # 确认 tar 包里有可执行文件、Flutter 引擎库与 data 目录，
+      # 而不只是"文件存在"。
+      - name: Verify tar contents
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import tarfile
+          path = 'dist/zip-browser-linux-x64.tar.gz'
+          with tarfile.open(path) as t:
+              names = t.getnames()
+              print('tar 条目数：', len(names))
+              for n in sorted(names)[:40]:
+                  print('  ', n)
+              for need in ['bundle/zip_browser', 'bundle/lib/libflutter_linux_gtk.so']:
+                  ok = need in names
+                  print(('[OK]   ' if ok else '[FAIL] '), need)
+                  assert ok, need
+              assert any(n.startswith('bundle/data/') for n in names), 'bundle/data/ 缺失'
+              print('tar 内容校验通过')
+          PY
+          file build/linux/x64/release/bundle/zip_browser
+
+      - name: Upload Linux archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-browser-linux-x64
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+      # 打 v* tag 时挂到 Release；不开 generate_release_notes 以免覆盖人工说明。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          fail_on_unmatched_files: false

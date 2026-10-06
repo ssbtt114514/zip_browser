@@ -228,10 +228,12 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+      # 打 v* tag 时把 Windows 包挂到 Release。
+      # 刻意不开 generate_release_notes：Release 的说明是人工撰写的
+      # （见 .tooling/release_notes_v*.md），自动生成的说明会把它覆盖掉。
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          generate_release_notes: true
           fail_on_unmatched_files: false

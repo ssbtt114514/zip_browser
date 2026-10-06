@@ -1,16 +1,33 @@
 name: build-android-apk
 
-# 构建 Android 安装包（release APK）。
+# 构建 Android 安装包（release APK，universal 单包，内含 arm64-v8a / armeabi-v7a / x86_64）。
 # 注意：仓库 .gitignore 忽略了根目录下的 android/（由 flutter create 生成），
 #       因此 CI 必须先执行 flutter create 生成 android 工程骨架。
+#
+# 触发条件：
+#   * main 分支推送 —— 让 APK 路径在合入时就得到验证，而不是等到发版才发现坏了；
+#   * v* tag       —— 打包并挂到对应的 GitHub Release；
+#   * 手动 dispatch。
+# 刻意不加 paths 过滤：GitHub Actions 里 paths 与 branches/tags 是「与」关系，
+# 同时写上会让 main 推送永远匹配不上（build-kernel 曾因此漏跑）。
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   apk:
+    name: Build Android APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,9 +67,49 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Collect APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          src=build/app/outputs/flutter-apk/app-release.apk
+          test -f "$src" || { echo "::error::未找到 $src"; exit 1; }
+          cp "$src" dist/zip-browser-android-universal.apk
+          ls -l dist
+
+      # 只检查"文件存在"说明不了什么：真正要确认的是 APK 里确实有
+      # AndroidManifest、dex 与各 ABI 的 Flutter 引擎库，装机后能跑起来。
+      - name: Verify APK contents
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import zipfile
+          path = 'dist/zip-browser-android-universal.apk'
+          with zipfile.ZipFile(path) as z:
+              names = z.namelist()
+              print('APK 条目数：', len(names))
+              libs = sorted(n for n in names if n.startswith('lib/'))
+              for n in libs:
+                  print('  ', n)
+              for need in ['AndroidManifest.xml', 'classes.dex', 'lib/arm64-v8a/libapp.so']:
+                  ok = need in names
+                  print(('[OK]   ' if ok else '[FAIL] '), need)
+                  assert ok, need
+          print('APK 内容校验通过')
+          PY
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: zip-browser-android-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          path: dist/*.apk
           if-no-files-found: error
+
+      # 打 v* tag 时把 APK 挂到 Release。
+      # 刻意不开 generate_release_notes：Release 说明为人工撰写
+      # （见 .tooling/release_notes_v*.md），自动生成会覆盖它。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          fail_on_unmatched_files: false

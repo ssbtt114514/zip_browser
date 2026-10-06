@@ -36,8 +36,19 @@ ABI_SYMBOLS = [
     "zb_kernel_dispatch_from_host", "zb_free_ptr",
 ]
 
-# 工作流里出现的这些路径是"构建产物"或"工具生成的模板文件"，本地不存在是正常的
-PATH_CHECK_SKIP = ("/kernels/", "/bin/", "test/widget_test.dart")
+# 工作流里出现的这些路径是"构建产物"或"工具生成的模板文件"，本地不存在是正常的。
+# 其中 lib/<abi>/… 是 Android APK 内部路径、lib/libflutter* 是 Linux/macOS
+# bundle 内部路径 —— 它们是**包内**路径，不是仓库文件，工作流里的断言字符串
+# 会被本检查的正则误当成仓库路径（build-android-apk / build-linux 就出现过）。
+PATH_CHECK_SKIP = (
+    "/kernels/",
+    "/bin/",
+    "test/widget_test.dart",
+    "/lib/arm64-v8a/",
+    "/lib/armeabi-v7a/",
+    "/lib/x86_64/",
+    "/lib/libflutter",
+)
 
 results = []
 

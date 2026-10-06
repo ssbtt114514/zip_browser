@@ -45,7 +45,8 @@ class KernelManifest {
   /// 引擎谱系：chromium / gecko / system / custom
   final KernelEngine engine;
 
-  /// 加载方式：`ffi`（dart:ffi 加载原生库）/ `webview2_fixed`（运行时目录）
+  /// 加载方式：`ffi`（dart:ffi 加载原生库）/ `webview2_fixed`（运行时目录）/
+  /// `engine_adapter`（引擎适配包：不携带渲染库，仅探测本机引擎运行时）
   final String type;
 
   /// FFI ABI 版本，需与宿主支持的一致
@@ -82,7 +83,8 @@ class KernelManifest {
     this.runtimeDir,
   });
 
-  static const supportedTypes = {'ffi', 'webview2_fixed'};
+  /// 支持的加载方式。`engine_adapter` 不携带平台产物，见 docs/KERNEL_ADAPTER.md
+  static const supportedTypes = {'ffi', 'webview2_fixed', 'engine_adapter'};
 
   /// 展示名（缺省时回退到 name）
   String get title => displayName ?? name;
@@ -194,7 +196,14 @@ class KernelManifest {
   }
 
   /// 该内核包是否声明了当前平台的产物
-  bool supportsPlatform(String platform, {String? abi}) =>
-      libraryRelativeFor(platform, abi: abi) != null ||
-      (type == 'webview2_fixed' && runtimeDir != null && platform == 'windows');
+  ///
+  /// `engine_adapter` 是适配器：不携带平台产物，因此在所有平台都视为可用
+  /// （可用性由运行时的引擎探测结果决定，见 docs/KERNEL_ADAPTER.md）。
+  bool supportsPlatform(String platform, {String? abi}) {
+    if (type == 'engine_adapter') return true;
+    return libraryRelativeFor(platform, abi: abi) != null ||
+        (type == 'webview2_fixed' &&
+            runtimeDir != null &&
+            platform == 'windows');
+  }
 }

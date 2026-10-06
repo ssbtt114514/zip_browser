@@ -197,9 +197,44 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 
 | 工作流 | 产物 |
 |--------|------|
-| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android release APK |
-| [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号，打包为 `lite_kernel.zip` / `hello_ffi_kernel.zip` 与 `.zbk`；推 `v*` tag 时把这些包挂到 Release |
-| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip`；推 `v*` tag 时自动创建 Release |
+| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android universal release APK（`dist/zip-browser-android-universal.apk`，内含 arm64-v8a / armeabi-v7a / x86_64）；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
+| [build-linux.yml](.github/workflows/build-linux.yml) | Linux x64 桌面版 `zip-browser-linux-x64.tar.gz`（先跑单元测试；tar 内容会校验可执行文件与 GTK 引擎库） |
+| [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号；产出 `lite_kernel.zip` / `hello_ffi_kernel.zip` / `zb_lite_kernel.zbk`，另加 `zb_chromium_kernel.zbk`（自带固定版本 Chromium 运行时）与 `zb_gecko_kernel.zbk`（Gecko 引擎适配包）；推 `v*` tag 时把这 5 个包挂到 Release |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip`；推 `v*` tag 时挂到 Release |
+
+### 8. 引擎内核包：Chromium 固定版本 / Gecko 适配包
+
+v0.7.0 起，Release 里除了轻量文本内核，还提供两个与"引擎"相关、但**能力边界完全不同**的内核包：
+
+| 内核包 | 清单类型 | 真实能力 | 适用平台 |
+|--------|----------|----------|----------|
+| `zb_chromium_kernel.zbk` | `webview2_fixed` | **真嵌入**：包内自带固定版本 Chromium（WebView2 Fixed Version，约 174 MB），安装后在「内核管理」选中即用它渲染页面，不依赖系统 Evergreen 运行时 | 仅 Windows |
+| `zb_gecko_kernel.zbk` | `engine_adapter` | **只探测，不渲染**：检测本机是否存在 Gecko 运行时（`xul.dll` / `libxul.so` / GeckoView），如实报告命中的路径与版本（读不到就写"未读取到"，不编造），缺失时给出可照做的提示 | 全平台 |
+
+```bash
+# Chromium：取运行时 → 装配进包目录 → 打 .zbk
+python tool/fetch_webview2_runtime.py --out runtime_wv2 --arch x64
+python tool/assemble_chromium_kernel.py --runtime runtime_wv2
+python tool/pack_kernel.py build_kernel_pkg/zb_chromium_kernel zb_chromium_kernel.zbk
+
+# Gecko 适配包只有清单与说明，任何平台都能打
+python tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel zb_gecko_kernel.zbk
+
+# 两类包都用宿主自己的安装器校验（Chromium 包加 --strict-runtime 挡住桩运行时）
+dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
+dart run tool/verify_packages.dart zb_gecko_kernel.zbk
+```
+
+> **Gecko 为什么不能真渲染**：Gecko 目前没有任何可供第三方**离屏嵌入**的发行版
+> （libxul 不对外提供嵌入接口；GeckoView 只在 Android、且要求宿主用 Kotlin 承载
+> 平台视图），所以这个包绝不谎称能加载网页 —— 它只做引擎探测与提示。
+> 详见 [docs/KERNEL_ADAPTER.md](docs/KERNEL_ADAPTER.md)。
+>
+> **Chromium 运行时的来源与许可**：运行时文件本体是微软的 WebView2 运行时
+> （`LegalCopyright: Microsoft Corporation`），通过 NuGet 包 `WebView2.Runtime.X64`
+> 获取，而该 NuGet 包的发布者账号并非微软官方；若要走完全官方的渠道，自行准备一份
+> 固定版本运行时目录再 `assemble_chromium_kernel.py --runtime <目录>` 装配即可。
+> 详见 [docs/KERNEL_CHROMIUM.md](docs/KERNEL_CHROMIUM.md)。
 
 ---
 
@@ -229,6 +264,10 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 - [docs/KERNEL_ABI.md](docs/KERNEL_ABI.md)：原生内核 FFI C ABI（16 个导出符号）
 - [docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)：轻量文本内核（zb_lite_kernel）
   的设计、`net.fetch` / 输入事件 / `kernel.state` 协议、能力边界
+- [docs/KERNEL_CHROMIUM.md](docs/KERNEL_CHROMIUM.md)：Chromium 固定版本内核包
+  （`webview2_fixed`）的取料、装配、打包与宿主契约
+- [docs/KERNEL_ADAPTER.md](docs/KERNEL_ADAPTER.md)：Gecko 引擎适配包
+  （`engine_adapter`）的语义、探测规则与"不渲染"的边界
 - [docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)：
   原生表面插件、FFI / Fixed Version 内核集成
 

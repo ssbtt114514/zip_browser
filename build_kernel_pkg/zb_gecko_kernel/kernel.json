@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.kernel.gecko",
+  "name": "Gecko 内核适配包",
+  "display_name": "Gecko 内核适配包（不提供网页渲染）",
+  "version": "1.0.0",
+  "engine": "gecko",
+  "type": "engine_adapter",
+  "abi_version": 1,
+  "description": "Gecko 引擎适配包：只探测本机是否已有 Gecko 运行时（xul.dll / libxul.so / GeckoView），并如实报告发现了什么、没发现什么。不携带任何渲染库，不提供离屏渲染能力——Gecko 目前没有可供第三方离屏嵌入的发行版；本包不加载 Gecko，也不显示网页内容。",
+  "capabilities": []
+}

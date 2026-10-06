@@ -91,6 +91,13 @@ python tool/pack_kernel.py path/to/kernel_dir zip_browser_kernel.zbk
 校验通过即输出 `.zbk`。在内核管理页安装后，可在内核列表中选中切换；
 新开标签页使用选中内核，系统内核始终保留、可随时切回。
 
+## 引擎适配包（`type: engine_adapter`）
+
+`type: engine_adapter` 的内核包**不携带任何平台产物**（既无 `libraries` 也无
+`runtime_dir`），只探测本机已有的引擎运行时并如实报告结果，**不提供网页渲染**。
+`build_kernel_pkg/zb_gecko_kernel/` 就是一个现成示例；字段语义、探测规则与能力
+边界见 [KERNEL_ADAPTER.md](KERNEL_ADAPTER.md)。
+
 ## 示例
 
 `build_kernel_pkg/zb_example_standalone/` 是一个可直接打包的示例

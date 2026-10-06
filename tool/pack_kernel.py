@@ -15,6 +15,14 @@
     bin/linux/libkernel.so
     bin/android/arm64-v8a/libkernel.so
     runtime/                   可选：WebView2 Fixed Version 类运行时目录
+
+内核类型（kernel.json 的 type 字段）：
+    ffi             dart:ffi 原生库，必须声明 libraries
+    webview2_fixed  WebView2 Fixed Version 运行时目录，必须声明 runtime_dir
+                    且目录内需含 msedgewebview2.exe
+    engine_adapter  引擎适配包：不携带任何平台产物（既无 libraries 也无
+                    runtime_dir），只做本机引擎运行时探测，不提供网页渲染。
+                    详见 docs/KERNEL_ADAPTER.md
 """
 import json
 import os
@@ -26,10 +34,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pack_common  # noqa: E402  （与打包器同目录的共用校验）
 
 # 与 Dart 侧 KernelManifest / KernelPackage 保持一致的校验规则
-SUPPORTED_TYPES = ("ffi", "webview2_fixed")
+SUPPORTED_TYPES = ("ffi", "webview2_fixed", "engine_adapter")
 SUPPORTED_ABI = 1
 ID_RE = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 MANIFEST_ENTRY = "kernel.json"
+# WebView2 Fixed Version 运行时里必须存在的宿主可执行文件：
+# 宿主 WindowsSystemKernel 会把它交给
+# WebviewController.initializeEnvironment(browserExePath: …)，缺了它内核起不来。
+WEBVIEW2_RUNTIME_EXE = "msedgewebview2.exe"
 SKIP_FILES = (".DS_Store",)
 SKIP_SUFFIX = ("~",)
 SKIP_DIRS = (".git", "__MACOSX")
@@ -92,7 +104,13 @@ def validate(manifest):
     if libs is not None and not isinstance(libs, dict):
         errors.append('字段 "libraries" 必须是对象')
     runtime = manifest.get("runtime_dir")
-    if not libs and not (mtype == "webview2_fixed" and runtime):
+    # engine_adapter 是适配器：不携带 libraries / runtime_dir 属正常情况，
+    # 其余类型仍必须声明至少一项平台产物。
+    if (
+        mtype != "engine_adapter"
+        and not libs
+        and not (mtype == "webview2_fixed" and runtime)
+    ):
         errors.append("清单未声明任何平台产物（libraries / runtime_dir 均为空）")
 
     caps = manifest.get("capabilities")
@@ -100,6 +118,52 @@ def validate(manifest):
         errors.append('字段 "capabilities" 必须是数组')
 
     return errors
+
+
+def check_webview2_runtime(src, manifest):
+    """webview2_fixed 的打包前置守卫。
+
+    清单声明了 runtime_dir 还不够：宿主 WindowsSystemKernel 会把该目录下的
+    msedgewebview2.exe 交给 WebviewController.initializeEnvironment(browserExePath:)，
+    目录不存在或缺少这个可执行文件时，打出来的 .zbk 装到用户机器上必然起不来。
+
+    返回错误字符串列表（空表示通过）。仅用于 webview2_fixed。
+    """
+    runtime = manifest.get("runtime_dir")
+    if not isinstance(runtime, str) or not runtime.strip():
+        return []  # 缺 runtime_dir 已由 validate() 报错
+
+    rel = runtime.strip().replace("\\", "/").strip("/")
+    runtime_dir = os.path.join(src, rel.replace("/", os.sep))
+    if not os.path.isdir(runtime_dir):
+        return [
+            f'清单声明 runtime_dir="{runtime}"，但包目录内不存在该目录：'
+            f"{os.path.relpath(runtime_dir, src).replace(os.sep, '/')}"
+        ]
+
+    # 允许可执行文件位于 runtime_dir 的任意子目录（Fixed Version 目录结构
+    # 可能带版本号层，如 runtime/120.0.2210.91/msedgewebview2.exe）
+    for root, dirs, files in os.walk(runtime_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        if any(f.lower() == WEBVIEW2_RUNTIME_EXE for f in files):
+            return []
+
+    return [
+        f'清单声明的 runtime_dir="{runtime}" 内未找到 {WEBVIEW2_RUNTIME_EXE}'
+    ]
+
+
+def report_webview2_runtime_errors(src, runtime_errors):
+    print("WebView2 固定版本运行时校验失败：")
+    for e in runtime_errors:
+        print(f"  - {e}")
+    print(
+        "提示：固定版本运行时需要先下载并装配，可执行\n"
+        "  python tool/fetch_webview2_runtime.py --out build_kernel_pkg/zb_chromium_kernel/runtime\n"
+        "  python tool/assemble_chromium_kernel.py\n"
+        "若运行时目录在别处，请把 runtime_dir 指向实际位置，或调整 --out 参数。"
+    )
+    return 1
 
 
 def iter_files(src):
@@ -141,6 +205,13 @@ def pack_dir(src, out):
         for e in errors:
             print(f"  - {e}")
         return 1
+
+    # webview2_fixed：清单声明 runtime_dir 后，还必须真的有运行时目录与
+    # msedgewebview2.exe，否则安装后必然不可用。
+    if str(manifest.get("type", "ffi")).strip() == "webview2_fixed":
+        runtime_errors = check_webview2_runtime(src, manifest)
+        if runtime_errors:
+            return report_webview2_runtime_errors(src, runtime_errors)
 
     # 清单声明了某个平台的库，包里就必须真的有这个文件；否则打出来的
     # .zbk 会「声明得比实际多」，安装后该平台必然不可用。

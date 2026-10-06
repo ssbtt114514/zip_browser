@@ -204,7 +204,9 @@ class _IntroCard extends StatelessWidget {
           const Expanded(
             child: Text(
               '浏览器内核以「独立安装包」（.zbk）分发，与功能插件相互解耦。\n'
-              '安装后自动探测并按平台加载：FFI 原生库或 WebView2 固定版本运行时。',
+              '安装后自动探测并按平台加载：FFI 原生库或 WebView2 固定版本运行时。\n'
+              '「引擎适配包」（type: engine_adapter）是例外：它只探测本机引擎运行时，'
+              '不提供网页渲染。',
               style: TextStyle(fontSize: 12.5, height: 1.45),
             ),
           ),
@@ -335,6 +337,25 @@ class _KernelTile extends StatelessWidget {
                   ],
                 ),
               ],
+              // 引擎适配包：明确告知它不渲染网页，避免"已选中=能上网"的误解
+              if (d.packageType == 'engine_adapter') ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber,
+                        size: 15, color: Colors.amber.shade800),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '引擎适配包：只探测本机引擎运行时，不提供网页渲染',
+                        style: TextStyle(
+                            fontSize: 11.5, color: Colors.brown.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -409,7 +430,8 @@ class _PackageCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${m.id} · ${m.engine.label} · ${m.type == 'webview2_fixed' ? 'WebView2 固定版本' : 'FFI 原生库 (ABI v${m.abiVersion})'}',
+              '${m.id} · ${m.engine.label} · '
+              '${kernelTypeLabel(m.type, abiVersion: m.abiVersion)}',
               style: const TextStyle(fontSize: 11.5, color: Colors.black54),
             ),
             const SizedBox(height: 4),
@@ -564,6 +586,8 @@ String _shortHash(String hash) =>
     hash.length > 16 ? '${hash.substring(0, 16)}…' : hash;
 
 String _platformSummary(KernelManifest manifest) {
+  // 引擎适配包不携带平台产物，它在所有平台都可安装/可选（但不渲染网页）
+  if (manifest.type == 'engine_adapter') return '全平台（适配器，无平台产物）';
   final libs = manifest.libraries;
   final parts = <String>[];
   for (final entry in libs.entries) {

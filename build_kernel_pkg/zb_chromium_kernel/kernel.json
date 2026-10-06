@@ -1,0 +1,22 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.kernel.chromium",
+  "name": "Chromium 固定版本内核（WebView2 Fixed Version）",
+  "display_name": "Chromium 固定版本内核",
+  "version": "154.0.4258.62",
+  "engine": "chromium",
+  "type": "webview2_fixed",
+  "abi_version": 1,
+  "description": "随包分发的 WebView2 Fixed Version 运行时（Chromium/Edge 内核，仅 Windows x64）。装配与打包时由 tool/assemble_chromium_kernel.py 依据 msedgewebview2.exe 的真实版本号改写 version / engine_version；安装后在「内核管理」中选用，宿主以 WindowsSystemKernel(fixedRuntimeDir: <安装目录>/runtime) 启动，不再依赖系统 Evergreen WebView2，内核版本因此可长期钉住。运行时体积约 150-200MB，解包后占用更多磁盘空间。",
+  "engine_version": "154.0.4258.62",
+  "capabilities": [
+    "loadUrl",
+    "evaluateJs",
+    "userScripts",
+    "multiTab",
+    "download",
+    "devTools"
+  ],
+  "libraries": {},
+  "runtime_dir": "runtime"
+}

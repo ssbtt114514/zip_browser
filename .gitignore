@@ -29,6 +29,14 @@ pubspec.lock
 # 打包产物
 *.zip
 *.zbk
+/dist/
+
+# 装配出来的 WebView2 固定版本运行时（约 174 MiB，绝不入库）
+build_kernel_pkg/*/runtime/
+
+# Python 缓存（tool/*.py 之间互相 import 会生成 tool/__pycache__/）
+__pycache__/
+*.pyc
 
 # 系统
 .DS_Store

@@ -133,6 +133,21 @@ enum KernelEngine {
   }
 }
 
+/// 内核包加载方式（清单 `type` 字段）的对外文案
+///
+/// 三种取值分别对应：FFI 原生库、WebView2 固定版本运行时、引擎适配包。
+/// 引擎适配包不携带渲染库，仅做引擎探测，文案必须如实说明这一点。
+String kernelTypeLabel(String type, {int abiVersion = 1}) {
+  switch (type) {
+    case 'webview2_fixed':
+      return 'WebView2 固定版本';
+    case 'engine_adapter':
+      return '引擎适配包（不携带渲染库）';
+    default:
+      return 'FFI 原生库 (ABI v$abiVersion)';
+  }
+}
+
 /// 导航阶段事件
 class NavigationEvent {
   final String url;

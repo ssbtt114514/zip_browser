@@ -131,6 +131,37 @@ class SettingsPage extends StatelessWidget {
                           size: 18, color: Colors.orange),
                   isThreeLine: false,
                 ),
+                // 引擎适配包：如实提示当前内核不渲染网页
+                if (current.packageType == 'engine_adapter')
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.warning_amber,
+                            size: 18, color: Colors.amber.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '当前内核是「引擎适配包」：它只探测本机 Gecko 运行时，'
+                            '不提供网页渲染。要浏览网页请切换到系统内核或其它内核包。',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.45,
+                              color: Colors.brown.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Divider(height: 1, indent: 56),
                 _NavTile(
                   icon: Icons.memory_outlined,
