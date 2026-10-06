@@ -50,6 +50,9 @@ echo.
 echo Built: %OUT%\zb_lite_kernel.dll
 echo Self-test: gcc -std=c99 -Wall -Wextra -I %INC2% -I %INC1% %SRC%\*.c native_kernels\zb_lite_kernel\tests\zb_lite_kernel_selftest.c -o build\selftest.exe
 echo Package:   python tool/pack_plugin.py example_plugins/lite_kernel
+echo Note:      manifest declares 5 platforms; linux/android libs must be built on
+echo            Linux/macOS (sh tool/build_lite_kernel.sh all) or taken from CI,
+echo            otherwise pack_plugin.py refuses to pack an incomplete zip.
 exit /b 0
 
 :failed

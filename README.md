@@ -131,8 +131,16 @@ sh tool/build_lite_kernel.sh android-arm64-v8a    # 另有 armeabi-v7a / x86_64
 
 # 打包插件 / 独立内核包
 python tool/pack_plugin.py example_plugins/lite_kernel
+
+# 独立内核包的 kernel.json 声明了 5 个平台，所以打包前要先把各平台产物
+# 装配进它的 bin/ 目录（否则打包器会拒绝，避免打出「清单声明了、包里却没有」的包）
+python tool/assemble_kernel_pkg.py
 python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
 ```
+
+> 打包器会校验「清单里声明的每个平台库是否真的存在」，不一致就直接拒绝打包；
+> 没在本地构建过的平台，也可以直接取 CI（`build-kernel` 工作流）产出的完整
+> `lite_kernel.zip` 与 `zb_lite_kernel.zbk`。
 
 > 主机要求：`selftest` 任意平台可用；`linux` / `android-*` 需要 **Linux 或 macOS**
 > 主机（Android 还需 NDK）。脚本会主动拒绝在 Windows 上交叉编译 —— 因为那会把
@@ -190,8 +198,8 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 | 工作流 | 产物 |
 |--------|------|
 | [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android release APK |
-| [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号，打包为 `lite_kernel.zip` / `hello_ffi_kernel.zip` 与 `.zbk` |
-| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip` 与插件 zip；推 `v*` tag 时自动创建 Release |
+| [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号，打包为 `lite_kernel.zip` / `hello_ffi_kernel.zip` 与 `.zbk`；推 `v*` tag 时把这些包挂到 Release |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip`；推 `v*` tag 时自动创建 Release |
 
 ---
 

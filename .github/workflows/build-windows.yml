@@ -210,16 +210,12 @@ jobs:
           $out = '${{ steps.out.outputs.dir }}'
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
-          # 1) 应用本体
+          # 只打包应用本体。
+          # 内核插件包与独立内核包一律由 build-kernel 工作流产出：那个工作流会构建全部
+          # 5 个平台的库之后再打包，而本工作流只构建了 Windows 一份。若在此处打包
+          # example_plugins/*，会得到「清单声明 5 个平台、包内只有 Windows」的不一致包
+          # （tool/verify_packages.dart 会判定为打包问题）。
           Compress-Archive -Path "$out/*" -DestinationPath dist/zip-browser-windows-x64.zip -Force
-
-          # 2) 若本地产出了内核 DLL，把每个内核插件目录也打成可直接安装的 zip
-          foreach ($p in @('example_plugins/lite_kernel', 'example_plugins/hello_ffi_kernel')) {
-            if (-not (Test-Path "$p/manifest.json")) { continue }
-            $name = Split-Path $p -Leaf
-            Compress-Archive -Path "$p/*" -DestinationPath "dist/$name-plugin.zip" -Force
-            Write-Host "打包插件：dist/$name-plugin.zip"
-          }
 
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
