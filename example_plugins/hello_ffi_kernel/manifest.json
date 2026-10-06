@@ -1,0 +1,23 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.hello_kernel",
+  "name": "示例 FFI 内核",
+  "version": "1.0.0",
+  "description": "携带一个软件渲染的原生内核（Windows .dll / Android .so），演示如何用插件替换浏览器内核。需先编译并集成 native surface 插件。",
+  "author": "Zip Browser",
+  "min_host_version": "0.2.0",
+  "permissions": ["kernel"],
+  "kernel": {
+    "type": "ffi",
+    "abi_version": 1,
+    "display_name": "示例软件渲染内核",
+    "libraries": {
+      "windows": "kernels/windows/zb_example_kernel.dll",
+      "android": {
+        "arm64-v8a": "kernels/android/arm64-v8a/libzb_example_kernel.so",
+        "armeabi-v7a": "kernels/android/armeabi-v7a/libzb_example_kernel.so",
+        "x86_64": "kernels/android/x86_64/libzb_example_kernel.so"
+      }
+    }
+  }
+}

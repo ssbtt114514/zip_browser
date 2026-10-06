@@ -1,0 +1,30 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 平台生成物（由 flutter create 生成，仅忽略仓库根目录下的同名目录，
+# 避免误伤 kernels/windows、native_plugins/*/android 这类子目录）
+/android/
+/windows/
+/linux/
+/macos/
+/ios/
+/web/
+
+# 打包产物
+*.zip
+
+# 系统
+.DS_Store
+Thumbs.db

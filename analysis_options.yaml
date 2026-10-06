@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    avoid_print: false
+
+analyzer:
+  errors:
+    # 平台插件在非目标平台仅作静态分析，不阻断
+    avoid_web_libraries_in_flutter: ignore
+  exclude:
+    - build/**
+    - android/**
+    - windows/**
+    - linux/**

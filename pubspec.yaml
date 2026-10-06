@@ -1,0 +1,45 @@
+name: zip_browser
+description: "可通过 zip 插件扩展功能与浏览器内核的多平台浏览器框架（Android / Windows，后续 Linux / macOS）"
+publish_to: "none"
+version: 0.3.0+3
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # —— 浏览器内核：系统 WebView ——
+  # Android：内部基于系统 Android System WebView（com.google.android.webview）
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.3.0
+  # Windows：基于系统 WebView2（Edge Chromium Runtime），
+  # 同时支持 Fixed Version（固定版本内核，可由插件 zip 携带）
+  webview_windows: ^0.4.0
+
+  # —— 状态管理 ——
+  provider: ^6.1.2
+
+  # —— zip 插件系统 ——
+  ffi: ^2.1.3              # FFI 字符串封送 / NativeCallable
+  archive: ^3.6.1          # zip 解压
+  crypto: ^3.0.6           # 插件完整性 / 签名校验
+  file_picker: ^8.1.2      # 选择 .zip 插件包
+
+  # —— 存储与工具 ——
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  http: ^1.2.2
+  share_plus: ^12.0.2
+  open_filex: ^4.7.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

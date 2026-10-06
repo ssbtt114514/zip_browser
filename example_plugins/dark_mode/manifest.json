@@ -1,0 +1,24 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.darkmode",
+  "name": "夜间模式",
+  "version": "1.0.0",
+  "description": "为所有网页注入深色滤镜，演示 content script 注入与 storage 权限调用。",
+  "author": "Zip Browser",
+  "homepage": "https://example.com",
+  "min_host_version": "0.1.0",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["extension.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "ui": {
+    "toolbar_button": {
+      "icon": "icons/icon.png",
+      "title": "夜间模式"
+    }
+  }
+}
