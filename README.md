@@ -11,16 +11,62 @@
 
 ## 功能特性
 
-- 多标签页、前进 / 后退 / 刷新、隐私标签、恢复关闭的标签页
-- 书签、历史记录、下载管理、清除浏览数据
+### 界面（v0.6.0 重新设计）
+
+- **统一设计令牌**：`lib/ui/design/zb_design.dart` 提供间距 / 圆角 / 动效时长与
+  一套**语义色板**（`ZbColors`）。外壳、标签栏、地址栏、书签栏全部改为从主题
+  取色，修复了旧版在深色主题下"标签栏发白、地址栏白底黑字"的问题，
+  颜色随深色模式与莫奈动态取色实时联动。
+- **标签栏**：卡片式标签、"浮起"的活动标签、悬停反馈；支持**拖拽排序**
+  （拖入 / 拖出固定区自动固定 / 取消固定）、**固定标签**、标签组（命名 + 换色 +
+  折叠）、标签搜索面板、右键 / 长按菜单（复制标签、在右侧新建、关闭其他、
+  关闭右侧、复制链接）。
+- **地址栏（Omnibox）**：胶囊输入框、可点击的安全状态胶囊（HTTPS / HTTP / 本地
+  文件 / 内置页，弹出站点信息与站点级缩放）、**本地联想下拉**（历史 + 书签 +
+  搜索 / 直达建议，支持 ↑ ↓ 选择、Enter 打开、Tab 补全、Esc 收起）、缩放倍率
+  胶囊。
+- **书签栏**：地址栏下方一键开关（`Ctrl+Shift+B`），右键可"在新标签打开 /
+  复制链接 / 删除"。
+- **主菜单**：按浏览器习惯重排为「标签 → 导航 → 数据 → 缩放 → 站点开关 →
+  工具 → 关于」，并标注对应快捷键。
+- **响应式**：宽度 < 720 时切换为紧凑布局（标签栏在工具栏下方、标签变窄）。
+- **内置新标签页**：重新设计的 HTML 页面——图形标记 + 搜索卡片 + 常用站点宫格
+  （字母头像按域名哈希取色）+ 最近访问列表，支持浅色 / 深色两套配色与
+  渐入动画，暗色主题跟随宿主设置。
+
+### 浏览器能力
+
+- 多标签页、前进 / 后退 / 刷新 / 停止、隐私标签、恢复关闭的标签页
+- **键盘快捷键**：见下表
+- **网页缩放**：按站点记忆倍率（`ZoomService`），档位 25% – 500%，可在地址栏
+  胶囊、工具箱、设置里调整与重置
+- **会话恢复**：退出时保存打开的标签（隐私标签不保存），下次启动可"打开主页"
+  或"恢复上次会话"，并记录是否异常退出
+- 书签、历史记录、下载管理、清除浏览数据、页面内查找
 - **资源嗅探**：自动嗅探页面视频 / 音频 / 图片，顶部浮动提示，可手动开关
 - **资源预览**：图片全屏缩放预览，视频 / 音频直接播放，一键下载
 - **二维码扫描**：扫一扫，识别 URL 直接打开
 - **阅读模式**、无图模式、多组色彩滤镜、字号 / 行距调节
-- 桌面版 UA、页面内查找、长按菜单、分享
+- 桌面版 UA、长按菜单、分享、全屏
 - **莫奈动态取色（Material You）**：Android 12+ 跟随壁纸生成主题，可开关
 - 多搜索引擎、深色 / 浅色主题、自定义外观
 - SVG 应用图标，内核与插件均可热插拔
+
+### 键盘快捷键
+
+| 快捷键 | 功能 | 快捷键 | 功能 |
+|---|---|---|---|
+| `Ctrl+T` | 新建标签页 | `Ctrl+W` | 关闭当前标签 |
+| `Ctrl+Shift+N` | 新建隐私标签 | `Ctrl+Shift+T` | 恢复关闭的标签页 |
+| `Ctrl+Tab` | 下一个标签 | `Ctrl+Shift+Tab` | 上一个标签 |
+| `Ctrl+1` … `Ctrl+8` | 切换到第 N 个标签 | `Ctrl+9` | 切换到最后一个标签 |
+| `Ctrl+L` | 聚焦地址栏 | `Ctrl+F` | 页面内查找 |
+| `F5` / `Ctrl+R` | 刷新 | `Ctrl+Shift+R` | 强制刷新（清缓存） |
+| `Alt+←` / `Alt+→` | 后退 / 前进 | `Alt+Home` | 打开主页 |
+| `Ctrl++` / `Ctrl+-` | 放大 / 缩小 | `Ctrl+0` | 重置缩放 |
+| `Ctrl+D` | 加入 / 移除书签 | `Ctrl+Shift+B` | 显示 / 隐藏书签栏 |
+| `Ctrl+Shift+O` | 书签管理 | `Ctrl+H` / `Ctrl+J` | 历史 / 下载 |
+| `F11` | 全屏 | `Esc` | 收起查找栏 / 嗅探面板 / 地址栏下拉 |
 
 ---
 
@@ -63,16 +109,38 @@ python tool/pack_plugin.py example_plugins/dark_mode
 
 # FFI 内核示例（需先按指南启用表面插件并编译 dll）
 python tool/pack_plugin.py example_plugins/hello_ffi_kernel
-```
 
 # 独立内核包（.zbk）
 python tool/pack_kernel.py build_kernel_pkg/zb_example_standalone zip_browser_kernel.zbk
 ```
 
+### 5. 轻量文本内核（可直接使用的软件渲染内核）
+
+仓库自带一个**零外部依赖、C99 软件渲染**的原生内核「轻量文本内核」
+（`zb_lite_kernel`）：经 `net.fetch` 真实抓取网页 → 解析 HTML → 按表面宽度
+自动换行排版 → 用内置 8×16 点阵字库绘制 RGBA 帧上屏，并支持滚动、点击链接、
+页内锚点与前进 / 后退 / 刷新。它没有 JS 引擎与 CSS 布局（诚实的能力边界见文档）。
+
+```bash
+# 自检：create → load HTML → attach 假 surface → tick → 校验帧缓冲确有像素
+sh tool/build_lite_kernel.sh selftest
+
+# 构建各平台产物（Windows 用 tool\build_lite_kernel.bat）
+sh tool/build_lite_kernel.sh linux
+sh tool/build_lite_kernel.sh android-arm64-v8a    # 另有 armeabi-v7a / x86_64
+
+# 打包插件 / 独立内核包
+python tool/pack_plugin.py example_plugins/lite_kernel
+python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
+```
+
+源码在 `native_kernels/zb_lite_kernel/`，设计与协议见
+**[docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)**。
+
 插件内核（让 zip 里的内核显示画面）的完整步骤见
 **[docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)**。
 
-### 5. 构建安装包 / 内核产物
+### 6. 构建安装包 / 内核产物
 
 Android 安装包：
 
@@ -88,8 +156,8 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 | 工作流 | 产物 |
 |--------|------|
 | [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android release APK |
-| [build-kernel.yml](.github/workflows/build-kernel.yml) | 示例 FFI 内核：Windows `.dll` + Android（`arm64-v8a` / `armeabi-v7a` / `x86_64`）`.so`，并打包为 `hello_ffi_kernel.zip` |
-| [build-windows.yml](.github/workflows/build-windows.yml) | Windows release 桌面版 |
+| [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号，打包为 `lite_kernel.zip` / `hello_ffi_kernel.zip` 与 `.zbk` |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip` 与插件 zip；推 `v*` tag 时自动创建 Release |
 
 ---
 
@@ -98,7 +166,7 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 | 类型 | 说明 | 示例 |
 |------|------|------|
 | JS 扩展 | content script 注入页面，通过 `window.zipBrowser.call` 调用标签页/存储/下载等宿主 API | 夜间模式、去广告、翻译、脚本增强 |
-| 原生内核 | zip 携带 `.dll/.so`，遵循统一 C ABI，可替换渲染内核 | 固定版本 Chromium、自研内核 |
+| 原生内核 | zip 携带 `.dll/.so`，遵循统一 C ABI，可替换渲染内核 | 固定版本 Chromium、自研内核、**轻量文本内核** |
 | UI 扩展 | 工具栏按钮、菜单项、popup 页面 | 扩展入口、工具弹窗 |
 
 插件权限（`tabs` / `storage` / `downloads` / `kernel` …）在 manifest 中声明，
@@ -117,16 +185,25 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
   `plugin.json`、`window.zipBrowser` JS API、用户脚本、打包）
 - [docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)：独立内核包 `.zbk` 制作
 - [docs/KERNEL_ABI.md](docs/KERNEL_ABI.md)：原生内核 FFI C ABI（16 个导出符号）
+- [docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)：轻量文本内核（zb_lite_kernel）
+  的设计、`net.fetch` / 输入事件 / `kernel.state` 协议、能力边界
 - [docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)：
   原生表面插件、FFI / Fixed Version 内核集成
 
 ## 目录
 
 ```text
-lib/core/       内核抽象 / 插件系统 / JS bridge / 标签页
+lib/core/       内核抽象 / 插件系统 / JS bridge / 标签页 / 主题引擎
 lib/platform/   Android / Windows / FFI / 占位 内核实现
+lib/services/   配置 / 书签 / 历史 / 下载 / 缩放 / 会话 / 地址栏补全等
 lib/ui/         浏览器界面
+  ├─ design/    设计令牌与语义色板（zb_design.dart）
+  ├─ widgets/   标签栏 / 地址栏 / 联想下拉 / 工具栏 / 书签栏
+  ├─ shortcuts/ 键盘快捷键与根焦点作用域
+  └─ pages/     设置、书签、历史、下载、内核与插件管理等页面
 native_plugins/ 插件内核所需的原生表面（纹理）
+native_kernels/ 原生内核源码（zb_lite_kernel：零依赖软件渲染内核）
 example_plugins/ 示例插件
-tool/           初始化 / 打包 / 集成脚本
+build_kernel_pkg/ 独立内核包（.zbk）源目录
+tool/           初始化 / 打包 / 构建 / 集成脚本
 ```

@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:path/path.dart' as p;
 
 import 'app.dart';
@@ -12,6 +11,7 @@ import 'core/plugin/plugin_manager.dart';
 import 'core/tab/tab_manager.dart';
 import 'core/script/userscript_manager.dart';
 import 'core/theme/appearance_settings.dart';
+import 'core/theme/theme_engine.dart';
 import 'services/bookmarks_service.dart';
 import 'services/config_service.dart';
 import 'services/desktop_mode_config.dart';
@@ -21,8 +21,30 @@ import 'services/history_service.dart';
 import 'services/host_bridge_api.dart';
 import 'services/paths.dart';
 import 'services/search_engines_service.dart';
+import 'services/session_service.dart';
 import 'services/ui_state.dart';
+import 'services/url_suggest_service.dart';
 import 'services/web_enhance_service.dart';
+import 'services/zoom_service.dart';
+
+/// 监听应用生命周期：退出前落盘会话快照，便于下次「恢复上次会话」。
+class _SessionLifecycleObserver extends WidgetsBindingObserver {
+  final TabManager tabManager;
+  final SessionService sessionService;
+
+  _SessionLifecycleObserver(this.tabManager, this.sessionService);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached ||
+        state == AppLifecycleState.paused) {
+      tabManager.flushSession();
+      if (state == AppLifecycleState.detached) {
+        sessionService.markCleanExit();
+      }
+    }
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +59,7 @@ Future<void> main() async {
   final appearance = await AppearanceSettings.create();
 
   // 2b-2. 莫奈动态色板（Android 12+，其他平台返回 null）
-  final CorePalette? monetPalette =
+  final MonetPalette? monetPalette =
       await DynamicColorPlugin.getCorePalette();
 
   // 2c. 搜索引擎
@@ -45,6 +67,12 @@ Future<void> main() async {
 
   // 2d. 桌面模式偏好
   final desktopModePrefs = DesktopModePreferences(config);
+
+  // 2e. 网页缩放（按站点记忆）
+  final zoomService = await ZoomService.create();
+
+  // 2f. 会话（上次打开的标签页）
+  final sessionService = await SessionService.create();
 
   // 3. 数据服务：书签 / 历史 / 下载
   final bookmarks = BookmarksService(
@@ -61,6 +89,13 @@ Future<void> main() async {
     downloadDir: AppPaths.downloadsDir,
   );
   final uiState = BrowserUiState();
+
+  // 3b. 地址栏自动补全（本地历史 + 书签 + 搜索）
+  final urlSuggest = UrlSuggestService(
+    history: history,
+    bookmarks: bookmarks,
+    searchTemplate: () => config.searchEngine,
+  );
 
   // 4. 插件系统
   final pluginManager = PluginManager(pluginsDir: AppPaths.pluginsDir)
@@ -96,6 +131,8 @@ Future<void> main() async {
     userscriptManager: userscriptManager,
     desktopModePrefs: desktopModePrefs,
     webEnhance: webEnhance,
+    zoomService: zoomService,
+    sessionService: sessionService,
   );
   tabManager.hostApi = HostBridgeApi(
     tabManager: tabManager,
@@ -103,8 +140,18 @@ Future<void> main() async {
     kernelRegistry: kernelRegistry,
   );
 
-  // 7. 首个标签页
-  await tabManager.createTab();
+  // 6b. 生命周期：退出时保存会话
+  final lifecycle = _SessionLifecycleObserver(tabManager, sessionService);
+  WidgetsBinding.instance.addObserver(lifecycle);
+
+  // 7. 首个标签页：按启动设置决定打开主页还是恢复上次会话
+  final snapshot = sessionService.readSnapshot();
+  if (sessionService.startupMode == SessionStartupMode.restore &&
+      snapshot.isNotEmpty) {
+    await tabManager.restoreLastSession();
+  } else {
+    await tabManager.createTab();
+  }
 
   runApp(ZipBrowserApp(
     config: config,
@@ -122,5 +169,8 @@ Future<void> main() async {
     userscriptManager: userscriptManager,
     desktopModePrefs: desktopModePrefs,
     webEnhance: webEnhance,
+    zoomService: zoomService,
+    sessionService: sessionService,
+    urlSuggest: urlSuggest,
   ));
 }

@@ -74,17 +74,21 @@ class AppearancePage extends StatelessWidget {
           // —— 主题模式 ——
           const _SectionTitle('主题模式'),
           Card(
-            child: Column(
-              children: [
-                for (final mode in ThemeModeOption.values)
-                  RadioListTile<ThemeModeOption>(
-                    value: mode,
-                    groupValue: s.themeMode,
-                    title: Text(_modeLabel(mode)),
-                    secondary: Icon(_modeIcon(mode)),
-                    onChanged: (v) => v == null ? null : s.setThemeMode(v),
-                  ),
-              ],
+            child: RadioGroup<ThemeModeOption>(
+              groupValue: s.themeMode,
+              onChanged: (v) {
+                if (v != null) s.setThemeMode(v);
+              },
+              child: Column(
+                children: [
+                  for (final mode in ThemeModeOption.values)
+                    RadioListTile<ThemeModeOption>(
+                      value: mode,
+                      title: Text(_modeLabel(mode)),
+                      secondary: Icon(_modeIcon(mode)),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -113,7 +117,7 @@ class AppearancePage extends StatelessWidget {
                   for (final c in AppearanceSettings.palette)
                     _ColorDot(
                       color: c,
-                      selected: s.seedColor.value == c.value,
+                      selected: s.seedColor.toARGB32() == c.toARGB32(),
                       onTap: () => s.setSeedColor(c),
                     ),
                 ],
@@ -140,7 +144,7 @@ class AppearancePage extends StatelessWidget {
                   for (final c in AppearanceSettings.accentPalette)
                     _ColorDot(
                       color: c,
-                      selected: s.accentColor?.value == c.value,
+                      selected: s.accentColor?.toARGB32() == c.toARGB32(),
                       onTap: () => s.setAccentColor(c),
                     ),
                 ],
@@ -187,16 +191,20 @@ class AppearancePage extends StatelessWidget {
           // —— 控件密度 ——
           const _SectionTitle('控件密度'),
           Card(
-            child: Column(
-              children: [
-                for (final d in DensityOption.values)
-                  RadioListTile<DensityOption>(
-                    value: d,
-                    groupValue: s.density,
-                    title: Text(_densityLabel(d)),
-                    onChanged: (v) => v == null ? null : s.setDensity(v),
-                  ),
-              ],
+            child: RadioGroup<DensityOption>(
+              groupValue: s.density,
+              onChanged: (v) {
+                if (v != null) s.setDensity(v);
+              },
+              child: Column(
+                children: [
+                  for (final d in DensityOption.values)
+                    RadioListTile<DensityOption>(
+                      value: d,
+                      title: Text(_densityLabel(d)),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

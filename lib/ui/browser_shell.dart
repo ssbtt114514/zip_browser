@@ -5,17 +5,44 @@ import 'package:provider/provider.dart';
 
 import '../core/sniff/sniff_model.dart';
 import '../core/tab/tab_manager.dart';
+import '../services/config_service.dart';
 import '../services/ui_state.dart';
 import 'context_menu_sheet.dart';
+import 'design/zb_design.dart';
 import 'find_bar.dart';
 import 'pages/sniff_panel.dart';
+import 'shortcuts/browser_focus.dart';
+import 'shortcuts/browser_shortcuts.dart';
+import 'widgets/bookmarks_bar.dart';
 import 'widgets/browser_tab_bar.dart';
 import 'widgets/main_toolbar.dart';
+import 'widgets/omnibox_suggestions.dart';
 import 'widgets/secondary_toolbar.dart';
 
-/// 浏览器主外壳
-class BrowserShell extends StatelessWidget {
+/// 浏览器主外壳。
+///
+/// 布局（宽屏）：标签栏 → 工具栏 → 书签栏（可选）→ 二级工具栏（可折叠）
+/// → 进度条 → 查找栏（可选）→ 内容区；
+/// 布局（窄屏）：工具栏 → 二级工具栏 → 进度条 → 标签栏 → 内容区。
+///
+/// 同时是键盘快捷键与根焦点的宿主。
+class BrowserShell extends StatefulWidget {
   const BrowserShell({super.key});
+
+  @override
+  State<BrowserShell> createState() => _BrowserShellState();
+}
+
+class _BrowserShellState extends State<BrowserShell> {
+  /// 快捷键的焦点落点（当焦点无处可去时收回此处）
+  final FocusNode _rootFocus =
+      FocusNode(debugLabel: 'browser_root', skipTraversal: true);
+
+  @override
+  void dispose() {
+    _rootFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,53 +53,77 @@ class BrowserShell extends StatelessWidget {
     final tm = context.watch<TabManager>();
     final tab = tm.active;
     final uiState = context.watch<BrowserUiState>();
+    final config = context.watch<ConfigService>();
     final findOpen = uiState.findOpen;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (!compact) const BrowserTabBar(),
-            const MainToolbar(),
-            // 二级工具栏（工具箱），展开/收起带尺寸动画
-            AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              child: uiState.secondaryOpen
-                  ? const SecondaryToolbar()
-                  : const SizedBox(width: double.infinity, height: 0),
-            ),
-            const _ProgressStrip(),
-            if (compact) const BrowserTabBar(compact: true),
-            if (findOpen && tab != null)
-              FindBar(
-                onFind: tab.kernel.findStart,
-                onNext: tab.kernel.findNext,
-                onClose: () async {
-                  await tab.kernel.findClear();
-                  if (context.mounted) {
-                    context.read<BrowserUiState>().closeFind();
-                  }
-                },
-              ),
-            Expanded(
-              child: Stack(
+    // 快捷键绑定表：随活动标签/配置变化重建
+    final bindings = browserShortcutBindings(context);
+
+    return CallbackShortcuts(
+      bindings: bindings,
+      child: Focus(
+        focusNode: _rootFocus,
+        autofocus: true,
+        child: BrowserFocus(
+          rootFocus: _rootFocus,
+          child: Scaffold(
+            body: SafeArea(
+              child: Column(
                 children: [
-                  const _ContentArea(),
-                  const _SniffHintBar(),
-                  if (uiState.sniffOpen)
-                    const Positioned.fill(child: SniffPanel()),
+                  if (!compact) const BrowserTabBar(),
+                  const MainToolbar(),
+                  if (config.showBookmarksBar) const BookmarksBar(),
+                  // 二级工具栏（工具箱），展开/收起带尺寸动画
+                  AnimatedSize(
+                    duration: ZbTokens.normal,
+                    curve: ZbTokens.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: uiState.secondaryOpen
+                        ? const SecondaryToolbar()
+                        : const SizedBox(width: double.infinity, height: 0),
+                  ),
+                  const _ProgressStrip(),
+                  if (compact) const BrowserTabBar(compact: true),
+                  if (findOpen && tab != null)
+                    FindBar(
+                      onFind: tab.kernel.findStart,
+                      onNext: tab.kernel.findNext,
+                      onClose: () async {
+                        await tab.kernel.findClear();
+                        if (context.mounted) {
+                          context.read<BrowserUiState>().closeFind();
+                          BrowserFocus.ensureHeld(context);
+                        }
+                      },
+                    ),
+                  Expanded(
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      // 点击网页内容后若焦点已丢失，收回根节点以保证快捷键可用
+                      onPointerDown: (_) => BrowserFocus.ensureHeld(context),
+                      child: Stack(
+                        // 地址栏联想下拉需要绘制到工具栏之外的区域
+                        clipBehavior: Clip.none,
+                        children: [
+                          const _ContentArea(),
+                          const _SniffHintBar(),
+                          const OmniboxSuggestions(),
+                          if (uiState.sniffOpen)
+                            const Positioned.fill(child: SniffPanel()),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // 长按菜单绑定（不可见，高度为 0）
+                  const _ContextMenuBinder(child: SizedBox.shrink()),
+                  // 用户脚本安装提示绑定
+                  const _UserscriptBinder(child: SizedBox.shrink()),
+                  // 扩展通知绑定
+                  const _ExtensionNotificationBinder(child: SizedBox.shrink()),
                 ],
               ),
             ),
-            // 长按菜单绑定（不可见，高度为 0）
-            const _ContextMenuBinder(child: SizedBox.shrink()),
-            // 用户脚本安装提示绑定
-            const _UserscriptBinder(child: SizedBox.shrink()),
-            // 扩展通知绑定
-            const _ExtensionNotificationBinder(child: SizedBox.shrink()),
-          ],
+          ),
         ),
       ),
     );
@@ -219,18 +270,20 @@ class _ProgressStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final tm = context.watch<TabManager>();
     final tab = tm.active;
+    final scheme = Theme.of(context).colorScheme;
 
     return ValueListenableBuilder<double>(
       valueListenable: tab?.progress ?? ValueNotifier<double>(0),
       builder: (_, value, __) {
         final show = value > 0 && value < 1;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: show ? 3 : 0,
+          duration: ZbTokens.fast,
+          height: show ? 2.5 : 0,
           child: show
               ? LinearProgressIndicator(
                   value: value,
                   backgroundColor: Colors.transparent,
+                  color: scheme.primary,
                 )
               : null,
         );
@@ -310,50 +363,60 @@ class _SniffHintBarState extends State<_SniffHintBar> {
   @override
   Widget build(BuildContext context) {
     final h = _hint;
-    final scheme = Theme.of(context).colorScheme;
+    final zb = context.zb;
     return Positioned(
-      top: 10,
-      left: 12,
-      right: 12,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: SlideTransition(
-            position:
-                Tween(begin: const Offset(0, -0.6), end: Offset.zero).animate(anim),
-            child: child,
+      top: 12,
+      left: 14,
+      right: 14,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: ZbTokens.normal,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween(
+                      begin: const Offset(0, -0.6), end: Offset.zero)
+                  .animate(anim),
+              child: child,
+            ),
           ),
-        ),
-        child: h == null
-            ? const SizedBox.shrink(key: ValueKey('empty'))
-            : Material(
-                key: const ValueKey('hint'),
-                elevation: 3,
-                borderRadius: BorderRadius.circular(12),
-                color: scheme.primaryContainer,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _open,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    child: Row(children: [
-                      Icon(Icons.satellite_alt,
-                          size: 19, color: scheme.onPrimaryContainer),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(h.message,
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: scheme.onPrimaryContainer)),
+          child: h == null
+              ? const SizedBox.shrink(key: ValueKey('empty'))
+              : Material(
+                  key: const ValueKey('hint'),
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(24),
+                  color: zb.chromeElevated,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: _open,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: ZbTokens.s6, vertical: ZbTokens.s5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: zb.hairline),
                       ),
-                      Icon(Icons.chevron_right,
-                          size: 20, color: scheme.onPrimaryContainer),
-                    ]),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.satellite_alt,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: ZbTokens.s4),
+                          Text(h.message,
+                              style: TextStyle(
+                                  fontSize: 12.5, color: zb.textPrimary)),
+                          const SizedBox(width: ZbTokens.s4),
+                          Icon(Icons.chevron_right,
+                              size: 18, color: zb.textMuted),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
+        ),
       ),
     );
   }

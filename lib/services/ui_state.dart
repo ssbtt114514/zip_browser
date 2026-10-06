@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
-/// 浏览器界面临时状态（页面查找栏开关、嗅探面板开关等）
+/// 浏览器界面临时状态（页面查找栏开关、嗅探面板开关、全屏等）
 class BrowserUiState extends ChangeNotifier {
   bool _findOpen = false;
   bool get findOpen => _findOpen;
@@ -10,6 +11,9 @@ class BrowserUiState extends ChangeNotifier {
 
   bool _secondaryOpen = false;
   bool get secondaryOpen => _secondaryOpen;
+
+  bool _fullscreen = false;
+  bool get fullscreen => _fullscreen;
 
   void openFind() {
     if (_findOpen) return;
@@ -44,4 +48,21 @@ class BrowserUiState extends ChangeNotifier {
     _secondaryOpen = !_secondaryOpen;
     notifyListeners();
   }
+
+  void setSecondaryOpen(bool value) {
+    if (_secondaryOpen == value) return;
+    _secondaryOpen = value;
+    notifyListeners();
+  }
+
+  /// 全屏 / 退出全屏（沉浸式）
+  Future<void> setFullscreen(bool value) async {
+    _fullscreen = value;
+    await SystemChrome.setEnabledSystemUIMode(
+      value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
+    notifyListeners();
+  }
+
+  Future<void> toggleFullscreen() => setFullscreen(!_fullscreen);
 }

@@ -1,0 +1,24 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.lite_kernel",
+  "name": "轻量文本内核",
+  "version": "1.0.0",
+  "description": "零依赖软件渲染内核：通过 net.fetch 真实抓取网页，解析 HTML、自动换行排版，用内置 8x16 点阵字库绘制 RGBA 帧；支持滚动、链接点击、页内锚点与历史前进后退。不含 JS 引擎与 CSS 布局（详见 docs/KERNEL_LITE.md）。",
+  "author": "Zip Browser",
+  "min_host_version": "0.2.0",
+  "permissions": ["kernel"],
+  "kernel": {
+    "type": "ffi",
+    "abi_version": 1,
+    "display_name": "轻量文本内核",
+    "libraries": {
+      "windows": "kernels/windows/zb_lite_kernel.dll",
+      "linux": "kernels/linux/x86_64/libzb_lite_kernel.so",
+      "android": {
+        "arm64-v8a": "kernels/android/arm64-v8a/libzb_lite_kernel.so",
+        "armeabi-v7a": "kernels/android/armeabi-v7a/libzb_lite_kernel.so",
+        "x86_64": "kernels/android/x86_64/libzb_lite_kernel.so"
+      }
+    }
+  }
+}

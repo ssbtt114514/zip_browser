@@ -139,7 +139,76 @@ method, params_json)`；宿主处理后通过 `zb_kernel_dispatch_from_host`
 
 ---
 
-## 七、Android 插件内核（实验性）
+## 七、进阶：轻量文本内核（zb_lite_kernel）
+
+`example_plugins/hello_ffi_kernel` 只是链路演示。仓库里还有一个**可直接使用**
+的软件渲染内核「轻量文本内核」：它经 `net.fetch` 真实抓取网页、解析 HTML、
+按表面宽度自动换行排版，并支持滚动 / 点击链接 / 页内锚点 / 前进后退。
+
+### 1. 构建
+
+```bat
+:: Windows（VS 开发者命令行；无 cl 时脚本自动回退 clang）
+tool\build_lite_kernel.bat
+```
+
+```bash
+# Linux / Android（NDK，参数即目标平台）
+sh tool/build_lite_kernel.sh linux
+sh tool/build_lite_kernel.sh android-arm64-v8a
+sh tool/build_lite_kernel.sh android-armeabi-v7a
+sh tool/build_lite_kernel.sh android-x86_64
+```
+
+产物直接落在插件包内，与 `manifest.json` 的声明一一对应：
+
+```text
+example_plugins/lite_kernel/kernels/
+├── windows/zb_lite_kernel.dll
+├── linux/x86_64/libzb_lite_kernel.so
+└── android/{arm64-v8a,armeabi-v7a,x86_64}/libzb_lite_kernel.so
+```
+
+> 打包前建议先跑自检（编译并运行 `tests/zb_lite_kernel_selftest.c`，
+> 走一遍 `create → load HTML → attach 假 surface → tick → 校验帧缓冲`）：
+> `sh tool/build_lite_kernel.sh selftest`。
+
+### 2. 安装
+
+```bat
+tool\pack_plugin.bat example_plugins\lite_kernel
+```
+
+浏览器中 **插件管理 → 安装 .zip**，然后 **设置 → 浏览器内核** 选
+「轻量文本内核」，**新开标签页**生效。
+
+### 3. 宿主需要提供的桥接方法
+
+内核的画面与交互依赖两个通过 `host_dispatch` 发起的方法（可以不实现，
+但那样就只能看内置首页，且状态回报会被宿主以 `error` 回执）：
+
+| method | 方向 | 作用 |
+|---|---|---|
+| `net.fetch` | 内核请求 → 宿主回包 | 抓取 http(s) 页面。参数 `{"url","method","max_bytes"}`，回包 `{"status","final_url","content_type","body"}` |
+| `kernel.state` | 内核主动上报 | 通知宿主 `url/title/can_back/can_forward/loading/scroll_y/doc_height` 变化 |
+
+输入事件（`pointer` / `scroll` / `key` / `resize`）由宿主通过
+`zb_kernel_dispatch_from_host` 送入内核。三组协议的精确 JSON 格式见
+[KERNEL_LITE.md](KERNEL_LITE.md)。
+
+### 4. 能力边界
+
+无 JavaScript 引擎、无 CSS 布局、不解码图片（`img` 画占位框 + alt 文本）、
+CJK 字符以等宽"豆腐块"占位（宽度与换行位置正确）。`eval_js` 只支持
+`document.title` / `document.body.innerText` / `document.links` / `location.href` /
+`window.scrollTo` / `window.scrollBy`，其余脚本诚实返回
+`{"ok":false,"error":"unsupported script"}`。
+
+完整说明：[docs/KERNEL_LITE.md](KERNEL_LITE.md)。
+
+---
+
+## 八、Android 插件内核（实验性）
 
 Android 默认使用系统 WebView，通常无需插件内核。若确需：
 

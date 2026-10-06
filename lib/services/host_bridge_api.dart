@@ -220,6 +220,60 @@ class HostBridgeApi {
             message.isEmpty ? title : '$title：$message');
         return BridgeResult.ok();
       },
+
+      // —— net：供原生（FFI）内核抓取页面 ——
+      //
+      // 原生内核自身不含 HTTP 栈，通过 host_dispatch("net.fetch", {...})
+      // 请求宿主代抓，宿主在此实现并回传 UTF-8 文本。
+      // 为避免被当作任意数据外泄通道，这里只允许 http/https 且限制体积。
+      'net.fetch': (r) async {
+        final url = r.paramsMap['url'] as String?;
+        if (url == null || url.isEmpty) return BridgeResult.fail('缺少 url');
+        final uri = Uri.tryParse(url);
+        if (uri == null ||
+            (uri.scheme != 'http' && uri.scheme != 'https')) {
+          return BridgeResult.fail('仅支持 http/https');
+        }
+        final maxBytes = (r.paramsMap['max_bytes'] as num?)?.toInt() ??
+            kNetFetchMaxBytes;
+        final limit = maxBytes.clamp(1024, kNetFetchHardLimit);
+        final method = (r.paramsMap['method'] as String? ?? 'GET').toUpperCase();
+        if (method != 'GET' && method != 'POST') {
+          return BridgeResult.fail('仅支持 GET/POST');
+        }
+        try {
+          const headers = {
+            'User-Agent': 'ZipBrowser/0.6 (LiteKernel)',
+            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+          };
+          final response = await (method == 'POST'
+                  ? http.post(uri,
+                      headers: headers,
+                      body: r.paramsMap['body'] as String?)
+                  : http.get(uri, headers: headers))
+              .timeout(const Duration(seconds: 25));
+          final bytes = response.bodyBytes;
+          final truncated = bytes.length > limit;
+          final slice = truncated ? bytes.sublist(0, limit) : bytes;
+          return BridgeResult.ok({
+            'status': response.statusCode,
+            'final_url': response.request?.url.toString() ?? url,
+            'content_type':
+                response.headers['content-type'] ?? 'application/octet-stream',
+            'truncated': truncated,
+            // 原生侧按 UTF-8 文本处理；非法字节以替换字符兜底
+            'body': utf8.decode(slice, allowMalformed: true),
+          });
+        } catch (e) {
+          return BridgeResult.fail('抓取失败：$e');
+        }
+      },
     };
   }
 }
+
+/// net.fetch 默认返回上限（2 MiB）
+const int kNetFetchMaxBytes = 2 * 1024 * 1024;
+
+/// net.fetch 硬上限（16 MiB），防止插件请求超大响应
+const int kNetFetchHardLimit = 16 * 1024 * 1024;

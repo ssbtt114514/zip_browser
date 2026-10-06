@@ -64,7 +64,7 @@ class AppearanceSettings extends ChangeNotifier {
   }
 
   Future<void> setSeedColor(Color color) async {
-    await _prefs.setInt(_kSeed, color.value);
+    await _prefs.setInt(_kSeed, color.toARGB32());
     notifyListeners();
   }
 
@@ -78,7 +78,7 @@ class AppearanceSettings extends ChangeNotifier {
     if (color == null) {
       await _prefs.remove(_kAccent);
     } else {
-      await _prefs.setInt(_kAccent, color.value);
+      await _prefs.setInt(_kAccent, color.toARGB32());
     }
     notifyListeners();
   }
@@ -148,7 +148,7 @@ class AppearanceSettings extends ChangeNotifier {
   }
 
   Future<void> setHomeBgColor(Color color) async {
-    await _prefs.setInt(_kBgColor, color.value);
+    await _prefs.setInt(_kBgColor, color.toARGB32());
     notifyListeners();
   }
 

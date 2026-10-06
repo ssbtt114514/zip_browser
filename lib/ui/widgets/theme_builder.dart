@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_keys.dart';
@@ -17,7 +16,7 @@ class ThemeBuilder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppearanceSettings>();
-    final monet = context.watch<CorePalette?>();
+    final monet = context.watch<MonetPalette?>();
     final styleMode =
         context.select<ConfigService, AppStyleMode>((c) => c.styleMode);
 

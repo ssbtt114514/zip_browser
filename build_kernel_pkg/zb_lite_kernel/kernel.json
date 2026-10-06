@@ -1,0 +1,22 @@
+{
+  "manifest_version": 1,
+  "id": "com.zipbrowser.kernel.lite",
+  "name": "轻量文本内核（独立包）",
+  "display_name": "轻量文本内核（.zbk）",
+  "version": "1.0.0",
+  "engine": "custom",
+  "type": "ffi",
+  "abi_version": 1,
+  "description": "zb_lite_kernel 独立内核包：通过 net.fetch 真实抓取网页，解析 HTML 并自动换行排版，用内置 8x16 点阵字库软件渲染上屏；支持滚动、链接点击与历史导航。不含 JS 引擎与 CSS 布局。",
+  "engine_version": "lite-1.0.0",
+  "capabilities": ["loadUrl", "evaluateJs", "multiTab"],
+  "libraries": {
+    "windows": "bin/windows/zb_lite_kernel.dll",
+    "linux": "bin/linux/x86_64/libzb_lite_kernel.so",
+    "android": {
+      "arm64-v8a": "bin/android/arm64-v8a/libzb_lite_kernel.so",
+      "armeabi-v7a": "bin/android/armeabi-v7a/libzb_lite_kernel.so",
+      "x86_64": "bin/android/x86_64/libzb_lite_kernel.so"
+    }
+  }
+}

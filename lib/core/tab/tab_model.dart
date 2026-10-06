@@ -21,6 +21,15 @@ class TabModel {
   /// 所属标签组 id（null 表示未分组）
   final ValueNotifier<String?> groupId = ValueNotifier(null);
 
+  /// 固定标签：始终排在最前，且不显示关闭按钮
+  final ValueNotifier<bool> isPinned = ValueNotifier(false);
+
+  /// 当前页缩放倍率（1.0 = 100%）
+  final ValueNotifier<double> zoom = ValueNotifier(1.0);
+
+  /// 创建时间（标签搜索/切换面板按此排序）
+  final DateTime createdAt;
+
   /// 用户在地址栏输入但尚未提交的内容（由 UI 同步）
   String? pendingAddress;
 
@@ -28,8 +37,10 @@ class TabModel {
     required this.id,
     required this.kernel,
     this.isPrivate = false,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
+  /// 安全释放全部 ValueNotifier
   Future<void> close() async {
     if (isPrivate) {
       // 隐私标签：尽力清理会话数据
@@ -47,6 +58,8 @@ class TabModel {
     isLoading.dispose();
     desktopMode.dispose();
     groupId.dispose();
+    isPinned.dispose();
+    zoom.dispose();
   }
 }
 

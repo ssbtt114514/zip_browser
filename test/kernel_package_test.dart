@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zip_browser/core/kernel/kernel_manager.dart';
 import 'package:zip_browser/core/kernel/kernel_package.dart';
+import 'package:zip_browser/services/paths.dart';
 
 /// 构造一个内存中的 .zbk 内核包
 List<int> buildKernelZip({
@@ -90,15 +91,24 @@ void main() {
   });
 
   test('平台产物缺失时仍可安装，但当前平台不可用', () {
+    // 只声明一个与**当前宿主平台不同**的产物，这样断言与运行平台无关
+    // （原先固定声明 windows，导致在 Windows 主机上跑必失败）。
+    // 路径必须指向 buildKernelZip 真正写入包内的占位文件，否则
+    // availableOn 会因为"文件不存在"而返回 false。
+    const placeholder = {
+      'windows': 'bin/windows/kernel.dll',
+      'linux': 'bin/linux/libkernel.so',
+    };
+    final host = AppPaths.platformKey;
+    final other = host == 'windows' ? 'linux' : 'windows';
+
     final record = KernelPackage.install(
-      zipBytes: buildKernelZip(libraries: {
-        'windows': 'bin/windows/kernel.dll',
-      }),
+      zipBytes: buildKernelZip(libraries: {other: placeholder[other]!}),
       kernelsDir: kernelsDir,
     );
 
-    expect(record.availableOn('windows'), isTrue);
-    expect(record.availableOn('linux'), isFalse);
+    expect(record.availableOn(other), isTrue);
+    expect(record.availableOn(host), isFalse);
 
     final manager = KernelManager(kernelsDir: kernelsDir)..loadAll();
     expect(manager.availableHere(), isEmpty);

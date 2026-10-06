@@ -1,30 +1,66 @@
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:zip_browser/core/plugin/plugin_manager.dart';
 import 'package:zip_browser/core/plugin/plugin_package.dart';
+
+/// 在内存中按 `tool/pack_plugin.py` 的规则（以插件目录为 zip 根）打包示例插件。
+///
+/// 原先测试直接读取工程根下的 `dark_mode.zip`，而该产物不入库（由打包脚本
+/// 生成），导致全新克隆后测试必然失败。这里改为从源码目录即时构建，
+/// 让测试变成自包含的。
+List<int> buildPluginZip(String pluginDir) {
+  final src = Directory(pluginDir);
+  if (!src.existsSync()) {
+    throw StateError('示例插件目录不存在：$pluginDir');
+  }
+  final archive = Archive();
+  final files = src
+      .listSync(recursive: true)
+      .whereType<File>()
+      .map((f) => f.path)
+      .toList()
+    ..sort();
+  for (final path in files) {
+    final name = p.relative(path, from: src.path).replaceAll(r'\', '/');
+    final bytes = File(path).readAsBytesSync();
+    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+  }
+  final encoded = ZipEncoder().encode(archive);
+  if (encoded == null) throw StateError('打包失败：$pluginDir');
+  return encoded;
+}
 
 void main() {
   late Directory tempRoot;
   late Directory pluginsDir;
-  late File zipFile;
+  late List<int> zipBytes;
+
+  setUpAll(() {
+    zipBytes = buildPluginZip('example_plugins/dark_mode');
+  });
 
   setUp(() {
     tempRoot = Directory.systemTemp.createTempSync('zb_test_');
     pluginsDir = Directory('${tempRoot.path}/plugins')
       ..createSync(recursive: true);
-    zipFile = File('dark_mode.zip');
   });
 
   tearDown(() {
     if (tempRoot.existsSync()) tempRoot.deleteSync(recursive: true);
   });
 
-  test('zip 插件可安装并记录元数据', () {
-    expect(zipFile.existsSync(), isTrue, reason: 'dark_mode.zip 应存在于工程根');
+  test('示例插件源码目录结构符合预期', () {
+    expect(zipBytes, isNotEmpty);
+    expect(File('example_plugins/dark_mode/manifest.json').existsSync(), isTrue);
+    expect(File('example_plugins/dark_mode/extension.js').existsSync(), isTrue);
+  });
 
+  test('zip 插件可安装并记录元数据', () {
     final record = PluginPackage.install(
-      zipBytes: zipFile.readAsBytesSync(),
+      zipBytes: zipBytes,
       pluginsDir: pluginsDir,
     );
 
@@ -42,7 +78,7 @@ void main() {
 
   test('PluginManager 可加载、收集脚本与权限', () {
     PluginPackage.install(
-      zipBytes: zipFile.readAsBytesSync(),
+      zipBytes: zipBytes,
       pluginsDir: pluginsDir,
     );
 
@@ -65,7 +101,7 @@ void main() {
 
   test('停用插件后不再收集脚本', () {
     PluginPackage.install(
-      zipBytes: zipFile.readAsBytesSync(),
+      zipBytes: zipBytes,
       pluginsDir: pluginsDir,
     );
     final pm = PluginManager(pluginsDir: pluginsDir);
@@ -83,7 +119,7 @@ void main() {
 
   test('篡改插件目录会被检测并强制停用', () {
     final record = PluginPackage.install(
-      zipBytes: zipFile.readAsBytesSync(),
+      zipBytes: zipBytes,
       pluginsDir: pluginsDir,
     );
     // 追加恶意内容
@@ -112,6 +148,21 @@ void main() {
     expect(
       () => PluginPackage.install(
         zipBytes: File('README.md').readAsBytesSync(),
+        pluginsDir: pluginsDir,
+      ),
+      throwsA(isA<PluginInstallException>()),
+    );
+  });
+
+  test('缺少 manifest 的 zip 被拒绝', () {
+    final archive = Archive();
+    final bytes = File('README.md').readAsBytesSync();
+    archive.addFile(ArchiveFile('docs/README.md', bytes.length, bytes));
+    final encoded = ZipEncoder().encode(archive)!;
+
+    expect(
+      () => PluginPackage.install(
+        zipBytes: encoded,
         pluginsDir: pluginsDir,
       ),
       throwsA(isA<PluginInstallException>()),

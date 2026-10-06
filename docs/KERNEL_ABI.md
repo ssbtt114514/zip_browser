@@ -88,6 +88,71 @@ gcc -shared -fPIC -O2 -I native_plugins/zb_native_surface/include \
 **Windows**：在 VS 开发者命令行（或 LLVM）下，见
 `example_plugins/hello_ffi_kernel` 内的构建脚本，导出上述符号为 dll。
 
+## ABI v1 的输入与网络扩展约定
+
+**ABI 版本保持 1 不变。** 内核需要网络、需要接收输入时，不需要新增导出符号——
+全部复用既有的 `host_dispatch`（内核 → 宿主）与 `zb_kernel_dispatch_from_host`
+（宿主 → 内核）这一对通道。这样老宿主可以安全加载新内核（缺少的桥接方法会
+返回 `error`，内核必须容错），新宿主也可以继续加载只实现 16 个符号的简单内核。
+
+### 1. 网络抓取：`net.fetch`
+
+内核 → 宿主：
+
+```c
+host_dispatch(request_id, "net.fetch", "{\"url\":\"https://…\",\"method\":\"GET\",\"max_bytes\":2097152}");
+```
+
+宿主 → 内核（异步回传，`dispatch_from_host`）：
+
+```json
+{"request_id":7,"result":{"status":200,"final_url":"https://…","content_type":"text/html","body":"<html>…</html>"}}
+{"request_id":7,"error":"network unreachable"}
+```
+
+- `body` 必须是完整响应体的 **UTF-8 文本**（gzip / 分块 / 字符集转换由宿主负责）；
+- `final_url` 用于更新地址栏与相对链接解析基准；
+- 宿主未注册 `net.fetch` 时会回 `{"request_id":N,"error":"no handler: net.fetch"}`，
+  内核应把它当作一次加载失败处理（渲染错误页），而不是崩溃或死等。
+
+### 2. 输入事件
+
+宿主把用户输入编码成 JSON 交给 `zb_kernel_dispatch_from_host`：
+
+```json
+{"event":"pointer","type":"down|up|move","x":120,"y":240}
+{"event":"scroll","dx":0,"dy":120}
+{"event":"key","key":"Home|End|PageUp|PageDown|Up|Down"}
+{"event":"resize"}
+```
+
+- 坐标是**表面像素坐标、相对可见区域左上角**，内核自己加滚动量换算文档坐标；
+- `dy` 正数表示向下滚动；
+- 内核必须把滚动量钳制在 `[0, doc_height - view_height]`。
+
+### 3. 状态上报：`kernel.state`
+
+内核 → 宿主（单向，宿主可不实现）：
+
+```c
+host_dispatch(request_id, "kernel.state", "{\"url\":…,\"title\":…,\"can_back\":true,\"can_forward\":false,\"loading\":false,\"scroll_y\":0,\"doc_height\":1234}");
+```
+
+宿主未注册该方法时回 `{"request_id":N,"error":"no handler: kernel.state"}`，
+**内核必须忽略**（这条错误回执不能影响正在进行的导航）。
+
+### 4. 约定小结
+
+| 约定 | 说明 |
+|---|---|
+| ABI 版本 | 仍为 `1`，16 个导出符号不变 |
+| 请求 id | 内核自增分配；只认领与自己等待中的请求匹配的回包 |
+| 未知 method | 宿主回 `error`，内核容错 |
+| 未知 event | 内核返回 `0`（已处理/忽略），不报错 |
+| 字符编码 | 一律 UTF-8 文本，不做字节级解码 |
+
+以上三组协议的完整字段表见 [KERNEL_LITE.md](KERNEL_LITE.md)。
+
 ## 打包
 
 - 作为独立内核分发：`.zbk`，见 [KERNEL_PACK.md](KERNEL_PACK.md)；
@@ -96,7 +161,19 @@ gcc -shared -fPIC -O2 -I native_plugins/zb_native_surface/include \
 
 ## 参考实现
 
-`example_plugins/hello_ffi_kernel/kernels/*/zb_example_kernel.c` 是零依赖
-参考实现：接收 URL / data:HTML → 提取可见文本 → 内置 5×7 点阵字库绘制到
-RGBA 帧缓冲 → 经 `frame_submit` 上屏。它不做真实 HTML 排版，仅用于验证
-完整的内核加载与上屏链路。
+仓库内有两个参考实现：
+
+1. **`example_plugins/hello_ffi_kernel/kernels/*/zb_example_kernel.c`** ——
+   最小演示内核：接收 URL / data:HTML → 提取可见文本 → 内置 5×7 点阵字库绘制到
+   RGBA 帧缓冲 → 经 `frame_submit` 上屏。不做真实 HTML 排版，用于验证完整的内核
+   加载与上屏链路。
+
+2. **`native_kernels/zb_lite_kernel/`（「轻量文本内核」）** ——
+   可用的软件渲染内核：经 `net.fetch` 真实抓取网页、解析 HTML（块级/行内标签、
+   实体、链接区间、锚点）、按表面宽度自动换行排版（英文按单词、CJK 按字符 2 格宽）、
+   用内置 8×16 点阵字库渲染 RGBA 帧，并支持滚动、点击链接、`#fragment` 页内跳转、
+   前进/后退/刷新与一组命令式 `eval_js`。构建产物对应
+   `example_plugins/lite_kernel/`（插件）与 `build_kernel_pkg/zb_lite_kernel/`（.zbk）。
+   设计与协议详见 **[KERNEL_LITE.md](KERNEL_LITE.md)**，
+   自检程序 `native_kernels/zb_lite_kernel/tests/zb_lite_kernel_selftest.c`
+   可在 CI 里直接编译运行。

@@ -10,6 +10,9 @@ class UserscriptsPage extends StatelessWidget {
 
   Future<void> _import(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+    // 在 await 之前取出依赖，避免跨异步间隙使用 BuildContext
+    final manager = context.read<UserscriptManager>();
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['js', 'user'],
@@ -18,7 +21,6 @@ class UserscriptsPage extends StatelessWidget {
     if (result == null || result.files.single.bytes == null) return;
 
     final source = String.fromCharCodes(result.files.single.bytes!);
-    final manager = context.read<UserscriptManager>();
     final imported = manager.importFromSource(
       source,
       filename: result.files.single.name,

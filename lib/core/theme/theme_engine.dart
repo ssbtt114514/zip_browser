@@ -7,11 +7,20 @@ import 'package:material_color_utilities/palettes/core_palette.dart';
 import 'appearance_settings.dart';
 import 'style_mode.dart';
 
+/// 莫奈动态色板类型别名。
+///
+/// `dynamic_color` 1.9 只暴露 `DynamicColorPlugin.getCorePalette()`，而
+/// `material_color_utilities` 已把 `CorePalette` 标记为 deprecated（推荐迁移到
+/// `DynamicScheme`）。在上游给出替代 API 之前，这里把该类型集中声明一次并
+/// 就地忽略告警，避免在 app / main / theme_builder 等处重复 ignore。
+// ignore: deprecated_member_use
+typedef MonetPalette = CorePalette;
+
 /// 主题引擎：根据 [AppearanceSettings] 生成亮/暗 ThemeData。
 class ThemeEngine {
   /// 计算颜色方案：优先使用莫奈动态色，否则用 seed 色生成。
   static ColorScheme _scheme(
-      AppearanceSettings s, Brightness brightness, CorePalette? monet) {
+      AppearanceSettings s, Brightness brightness, MonetPalette? monet) {
     if (s.monetEnabled && monet != null) {
       return monet.toColorScheme(brightness: brightness);
     }
@@ -19,14 +28,14 @@ class ThemeEngine {
   }
 
   static ThemeData light(AppearanceSettings s,
-      {CorePalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
+      {MonetPalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
     final scheme = _scheme(s, Brightness.light, monet);
     final accent = s.accentColor ?? scheme.primary;
     return _build(scheme, accent, s, Brightness.light, styleMode);
   }
 
   static ThemeData dark(AppearanceSettings s,
-      {CorePalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
+      {MonetPalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
     final scheme = _scheme(s, Brightness.dark, monet);
     final accent = s.accentColor ?? scheme.primary;
     return _build(scheme, accent, s, Brightness.dark, styleMode);

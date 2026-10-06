@@ -23,6 +23,7 @@ class ConfigService extends ChangeNotifier {
   static const _kHomeRecent = 'home.show_recent';
   static const _kAutoSniff = 'sniff.auto';
   static const _kStyleMode = 'ui.style_mode';
+  static const _kBookmarksBar = 'ui.bookmarks_bar';
 
   final SharedPreferences _prefs;
 
@@ -111,4 +112,9 @@ class ConfigService extends ChangeNotifier {
   bool get autoSniff => _prefs.getBool(_kAutoSniff) ?? true;
   Future<void> setAutoSniff(bool value) =>
       _apply(() => _prefs.setBool(_kAutoSniff, value));
+
+  /// 是否在地址栏下方显示书签栏
+  bool get showBookmarksBar => _prefs.getBool(_kBookmarksBar) ?? false;
+  Future<void> setShowBookmarksBar(bool value) =>
+      _apply(() => _prefs.setBool(_kBookmarksBar, value));
 }
