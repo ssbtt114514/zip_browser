@@ -227,6 +227,12 @@ class AndroidSystemKernel implements BrowserKernel {
   // —— 增强能力 ——
 
   @override
+  Future<void> setJavaScriptEnabled(bool enabled) async {
+    await _controller?.setJavaScriptMode(
+        enabled ? JavaScriptMode.unrestricted : JavaScriptMode.disabled);
+  }
+
+  @override
   Future<void> setUserAgent(String? userAgent) async {
     await _controller?.setUserAgent(userAgent);
   }

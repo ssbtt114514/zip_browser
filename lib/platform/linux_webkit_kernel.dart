@@ -113,6 +113,11 @@ class LinuxWebKitKernel implements BrowserKernel {
       _bridge.register(method, handler);
 
   @override
+  Future<void> setJavaScriptEnabled(bool enabled) async {
+    // Linux WebKit 雏形：暂不实现
+  }
+
+  @override
   Future<void> setUserAgent(String? userAgent) async {
     try {
       await _channel.invokeMethod('setUserAgent', {'userAgent': userAgent ?? ''});

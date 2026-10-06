@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -114,7 +115,19 @@ class FfiBrowserKernel implements BrowserKernel {
       _textureId = textureId;
 
       // native surface 插件导出的帧入口（帧路径不经过 Dart）
-      final submit = DynamicLibrary.process()
+      // Android：surface 是独立 jni 库，优先按名打开；
+      // Windows：符号编译进主程序，从进程查找。
+      DynamicLibrary surfaceLib;
+      if (Platform.isAndroid) {
+        try {
+          surfaceLib = DynamicLibrary.open('libzb_native_surface.so');
+        } catch (_) {
+          surfaceLib = DynamicLibrary.process();
+        }
+      } else {
+        surfaceLib = DynamicLibrary.process();
+      }
+      final submit = surfaceLib
           .lookup<NativeFunction<FrameSubmitC>>('zb_surface_submit_frame');
 
       _surfaceAvailable = _link!.attachSurface(
@@ -187,6 +200,10 @@ class FfiBrowserKernel implements BrowserKernel {
       _bridge.register(method, handler);
 
   // —— 增强能力（软件内核：多数不适用，空实现）——
+  @override
+  @override
+  Future<void> setJavaScriptEnabled(bool enabled) async {}
+
   @override
   Future<void> setUserAgent(String? userAgent) async {}
   @override

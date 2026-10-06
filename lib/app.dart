@@ -59,7 +59,7 @@ class ZipBrowserApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<ConfigService>.value(value: config),
+        ChangeNotifierProvider<ConfigService>.value(value: config),
         Provider<PluginManager>.value(value: pluginManager),
         Provider<KernelRegistry>.value(value: kernelRegistry),
         ChangeNotifierProvider<KernelManager>.value(value: kernelManager),

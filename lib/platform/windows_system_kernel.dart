@@ -246,6 +246,11 @@ else __run();
   // —— 增强能力 ——
 
   @override
+  Future<void> setJavaScriptEnabled(bool enabled) async {
+    // webview_windows 0.4 未暴露 WebView2 的 IsScriptEnabled，暂不支持运行时禁用
+  }
+
+  @override
   Future<void> setUserAgent(String? userAgent) async {
     // webview_windows 的 setUserAgent 需要非空字符串
     await _controller?.setUserAgent(userAgent ?? '');

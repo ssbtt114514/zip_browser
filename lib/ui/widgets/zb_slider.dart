@@ -1,4 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/theme/style_mode.dart';
+import '../../services/config_service.dart';
 
 /// 统一风格的滑块：圆润粗轨道、圆形拖柄、按压放大、平滑的主题色高亮。
 class ZbSlider extends StatelessWidget {
@@ -26,6 +31,21 @@ class ZbSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final cupertino = context.select<ConfigService, bool>(
+        (c) => c.styleMode == AppStyleMode.cupertino);
+
+    if (cupertino) {
+      return CupertinoSlider(
+        value: value.clamp(min, max),
+        min: min,
+        max: max,
+        divisions: divisions,
+        onChanged: onChanged,
+        onChangeStart: onChangeStart,
+        onChangeEnd: onChangeEnd,
+        activeColor: scheme.primary,
+      );
+    }
 
     return SliderTheme(
       data: SliderThemeData(

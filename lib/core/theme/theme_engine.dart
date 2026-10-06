@@ -1,9 +1,11 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
 
 import 'appearance_settings.dart';
+import 'style_mode.dart';
 
 /// 主题引擎：根据 [AppearanceSettings] 生成亮/暗 ThemeData。
 class ThemeEngine {
@@ -16,16 +18,18 @@ class ThemeEngine {
     return ColorScheme.fromSeed(seedColor: s.seedColor, brightness: brightness);
   }
 
-  static ThemeData light(AppearanceSettings s, {CorePalette? monet}) {
+  static ThemeData light(AppearanceSettings s,
+      {CorePalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
     final scheme = _scheme(s, Brightness.light, monet);
     final accent = s.accentColor ?? scheme.primary;
-    return _build(scheme, accent, s, Brightness.light);
+    return _build(scheme, accent, s, Brightness.light, styleMode);
   }
 
-  static ThemeData dark(AppearanceSettings s, {CorePalette? monet}) {
+  static ThemeData dark(AppearanceSettings s,
+      {CorePalette? monet, AppStyleMode styleMode = AppStyleMode.material}) {
     final scheme = _scheme(s, Brightness.dark, monet);
     final accent = s.accentColor ?? scheme.primary;
-    return _build(scheme, accent, s, Brightness.dark);
+    return _build(scheme, accent, s, Brightness.dark, styleMode);
   }
 
   static ThemeData _build(
@@ -33,15 +37,22 @@ class ThemeEngine {
     Color accent,
     AppearanceSettings s,
     Brightness brightness,
+    AppStyleMode styleMode,
   ) {
     final isDark = brightness == Brightness.dark;
+    final cupertino = styleMode == AppStyleMode.cupertino;
     final scaffoldBg = isDark && s.trueBlack
         ? Colors.black
         : (isDark ? const Color(0xFF121418) : const Color(0xFFF4F7FA));
-    final radius = s.radiusValue;
+    // Cupertino 风格使用更大的圆角
+    final radius =
+        cupertino ? (s.radiusValue < 14 ? 14.0 : s.radiusValue) : s.radiusValue;
 
     return ThemeData(
       useMaterial3: true,
+      platform: cupertino ? TargetPlatform.iOS : defaultTargetPlatform,
+      splashFactory:
+          cupertino ? NoSplash.splashFactory : InkSparkle.splashFactory,
       colorScheme: scheme.copyWith(
         secondary: accent,
       ),
@@ -124,13 +135,14 @@ class ThemeEngine {
           borderRadius: BorderRadius.circular(radius),
         ),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          for (final p in TargetPlatform.values)
+            p: cupertino
+                ? const CupertinoPageTransitionsBuilder()
+                : (p == TargetPlatform.iOS || p == TargetPlatform.macOS
+                    ? const CupertinoPageTransitionsBuilder()
+                    : const ZoomPageTransitionsBuilder()),
         },
       ),
     );

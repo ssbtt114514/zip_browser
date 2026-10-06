@@ -12,6 +12,7 @@ import '../pages/bookmarks_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import '../pages/kernels_page.dart';
+import '../pages/manual_page.dart';
 import '../pages/plugins_page.dart';
 import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
@@ -61,6 +62,13 @@ class MainToolbar extends StatelessWidget {
             ),
           ),
           const _ExtensionButtons(),
+          ZbToolButton(
+            icon: Icons.menu_book_outlined,
+            tooltip: '使用手册',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ManualPage()),
+            ),
+          ),
           PopupMenuButton<String>(
             tooltip: '菜单',
             splashRadius: 16,
@@ -190,12 +198,43 @@ class MainToolbar extends StatelessWidget {
         );
       case 'about':
         if (context.mounted) {
-          showAboutDialog(
+          await showDialog(
             context: context,
-            applicationName: 'Zip Browser',
-            applicationVersion: '0.4.0',
-            applicationLegalese:
-                '可通过 zip 插件扩展功能与内核\nAndroid: System WebView · Windows: WebView2\n${Platform.operatingSystem}',
+            builder: (dctx) => AlertDialog(
+              icon: const Icon(Icons.language),
+              title: const Text('Zip Browser'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('版本 0.5.0',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Text(
+                    '可通过 zip 插件扩展功能与内核\n'
+                    'Android: System WebView · Windows: WebView2\n'
+                    '当前平台：${Platform.operatingSystem}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.person_outline, size: 18),
+                    label: const Text('作者：ssbtt114514（访问主页）'),
+                    onPressed: () {
+                      Navigator.of(dctx).pop();
+                      tm.createTab(
+                          url: 'https://ssbtt114514.github.io');
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dctx).pop(),
+                  child: const Text('关闭'),
+                ),
+              ],
+            ),
           );
         }
     }

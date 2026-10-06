@@ -56,9 +56,16 @@ class _ZbToolButtonState extends State<ZbToolButton> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: enabled ? (_) => _setDown(true) : null,
-        onTapUp: enabled ? (_) => _setDown(false) : null,
         onTapCancel: enabled ? () => _setDown(false) : null,
-        onTap: widget.onTap,
+        onTap: enabled
+            ? () {
+                widget.onTap?.call();
+                // 抬起后短暂保持缩小再回弹，按压动画更清晰
+                Future.delayed(const Duration(milliseconds: 95), () {
+                  if (mounted) _setDown(false);
+                });
+              }
+            : null,
         child: AnimatedScale(
           scale: _down ? 0.86 : 1.0,
           duration: const Duration(milliseconds: 110),

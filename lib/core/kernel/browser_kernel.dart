@@ -56,6 +56,9 @@ abstract class BrowserKernel {
 
   // —— 浏览器增强能力 ——
 
+  /// 启用 / 禁用 JavaScript（实时生效）
+  Future<void> setJavaScriptEnabled(bool enabled);
+
   /// 设置 User-Agent；null 恢复内核默认
   Future<void> setUserAgent(String? userAgent);
 

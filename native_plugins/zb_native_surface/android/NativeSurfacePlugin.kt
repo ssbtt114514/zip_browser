@@ -1,17 +1,17 @@
-// Zip Browser —— 原生表面插件（Android，实验性骨架）
+// Zip Browser —— 原生表面插件（Android）
 //
-// Android 默认使用系统 WebView，通常无需本插件。
-// 仅当需要在 Android 上运行插件携带的 FFI 内核时使用：
-//   1. 在 MainActivity.configureFlutterEngine 中注册本插件
-//   2. createSurface 注册一个 SurfaceTexture，得到 Flutter textureId
-//   3. 将 Surface(SurfaceTexture) 通过 JNI 交给内核，内核使用 EGL
-//      直接向该 Surface 绘制（帧路径不经过 Dart）
+// 仅当需要在 Android 上运行插件携带的 FFI 内核时使用。由 MainActivity
+// 在 configureFlutterEngine 中注册。
 //
-// 包名请按 flutter create 生成的实际 applicationId 调整。
+// createSurface：
+//   1. 通过 TextureRegistry 创建 SurfaceTexture，得到 Flutter textureId
+//   2. 用其构造 android.view.Surface，交给 native（zb_native_surface_jni）
+//   3. 返回 textureId
+// 内核经 dart:ffi 调用导出的 zb_surface_submit_frame 提交 RGBA 帧，
+// native 内部用 EGL 绘制到该 Surface。
 
-package com.example.zip_browser
+package com.zipbrowser.zip_browser
 
-import android.graphics.SurfaceTexture
 import android.view.Surface
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -23,51 +23,48 @@ class NativeSurfacePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private lateinit var channel: MethodChannel
     private lateinit var textures: TextureRegistry
-    private val surfaces = HashMap<Long, Surface>()
     private val entries = HashMap<Long, TextureRegistry.SurfaceTextureEntry>()
+    private val surfaces = HashMap<Long, Surface>()
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         textures = binding.textureRegistry
         channel = MethodChannel(binding.binaryMessenger, channelName)
         channel.setMethodCallHandler(this)
+        System.loadLibrary("zb_native_surface")
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "createSurface" -> {
-                val width = (call.argument<Int>("width") ?: 960)
-                val height = (call.argument<Int>("height") ?: 600)
+                val width = call.argument<Int>("width") ?: 960
+                val height = call.argument<Int>("height") ?: 600
 
                 val entry = textures.createSurfaceTexture()
-                val surfaceTexture: SurfaceTexture = entry.surfaceTexture()
-                surfaceTexture.setDefaultBufferSize(width, height)
-                val surface = Surface(surfaceTexture)
+                val st = entry.surfaceTexture()
+                st.setDefaultBufferSize(width, height)
+                val surface = Surface(st)
 
-                val textureId = entry.id()
-                surfaces[textureId] = surface
-                entries[textureId] = entry
-
-                // TODO(内核集成): 通过 JNI 把 surface（或其 ANativeWindow 指针）
-                // 交给插件内核；内核 EGL 绘制后调用
-                // entry.surfaceTexture().__notifyFrameAvailable() 或由
-                // SurfaceTexture 自动上屏。
-                result.success(
-                    mapOf(
-                        "textureId" to textureId,
-                        // Android 无 C 函数地址回传，使用 JNI 桥
-                        "submit_frame_address" to 0L
-                    )
-                )
+                val id = entry.id()
+                entries[id] = entry
+                surfaces[id] = surface
+                nativeCreate(id, surface, width, height)
+                // Dart 端 invokeMethod<int> 接收，直接回传纹理 id
+                result.success(id)
             }
             "destroySurface" -> {
-                val textureId = (call.argument<Number>("textureId") ?: 0).toLong()
-                surfaces.remove(textureId)?.release()
-                entries.remove(textureId)?.release()
+                val id = (call.argument<Number>("textureId") ?: 0).toLong()
+                nativeDestroy(id)
+                surfaces.remove(id)?.release()
+                entries.remove(id)?.release()
                 result.success(null)
             }
             else -> result.notImplemented()
         }
     }
+
+    private external fun nativeCreate(
+        textureId: Long, surface: Surface, width: Int, height: Int)
+    private external fun nativeDestroy(textureId: Long)
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)

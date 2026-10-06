@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/appearance_settings.dart';
+import '../../core/theme/style_mode.dart';
+import '../../services/config_service.dart';
 
 /// 外观自定义页：主题模式、主色、强调色、字体、密度、圆角、起始页背景、纯黑模式
 class AppearancePage extends StatelessWidget {
@@ -17,6 +19,34 @@ class AppearancePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
+          // —— 视觉风格（Material / Cupertino）——
+          const _SectionTitle('视觉风格'),
+          Builder(
+            builder: (bctx) {
+              final config = bctx.watch<ConfigService>();
+              return Card(
+                child: Column(
+                  children: [
+                    for (final mode in AppStyleMode.values)
+                      RadioListTile<AppStyleMode>(
+                        value: mode,
+                        groupValue: config.styleMode,
+                        title: Text(mode.label),
+                        subtitle: Text(mode.description,
+                            style: const TextStyle(fontSize: 11.5)),
+                        secondary: Icon(mode == AppStyleMode.cupertino
+                            ? Icons.phone_iphone
+                            : Icons.android),
+                        onChanged: (v) =>
+                            v == null ? null : config.setStyleMode(v),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
           // —— 主题模式 ——
           const _SectionTitle('主题模式'),
           Card(

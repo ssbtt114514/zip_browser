@@ -11,6 +11,7 @@ import 'home_settings_page.dart';
 import 'kernels_page.dart';
 import 'reading_page.dart';
 import 'search_engines_page.dart';
+import '../widgets/adaptive.dart';
 
 /// 设置主页：分类卡片入口 + 当前内核概要 + 内容安全
 class SettingsPage extends StatelessWidget {
@@ -150,27 +151,31 @@ class SettingsPage extends StatelessWidget {
             margin: EdgeInsets.zero,
             child: Column(
               children: [
-                SwitchListTile(
+                ListTile(
                   title: const Text('启用 JavaScript',
                       style: TextStyle(fontSize: 13.5)),
-                  value: config.jsEnabled,
-                  onChanged: config.setJsEnabled,
+                  trailing: AdaptiveSwitch(
+                    value: config.jsEnabled,
+                    onChanged: config.setJsEnabled,
+                  ),
                 ),
                 const Divider(height: 1),
-                SwitchListTile(
+                ListTile(
                   title: const Text('仅允许受信任白名单插件',
                       style: TextStyle(fontSize: 13.5)),
                   subtitle: const Text('开启后未在白名单中的 zip 将被拒绝安装',
                       style: TextStyle(fontSize: 11.5)),
-                  value: config.enforceTrustedOnly,
-                  onChanged: config.setEnforceTrustedOnly,
+                  trailing: AdaptiveSwitch(
+                    value: config.enforceTrustedOnly,
+                    onChanged: config.setEnforceTrustedOnly,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
           const Center(
-            child: Text('Zip Browser 0.3.0 · 独立内核包 · 多平台浏览器框架',
+            child: Text('Zip Browser 0.5.0 · 独立内核包 · 多平台浏览器框架',
                 style: TextStyle(fontSize: 11.5, color: Colors.black38)),
           ),
         ],

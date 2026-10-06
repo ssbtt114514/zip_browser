@@ -1,12 +1,17 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/desktop_mode_config.dart';
+import '../core/theme/style_mode.dart';
 import '../core/web/web_enhance_settings.dart';
 
-/// 全局配置（持久化）
-class ConfigService {
+/// 全局配置（持久化）。
+///
+/// 继承 [ChangeNotifier]：任何设置项变化后都会通知，UI 通过
+/// `context.watch<ConfigService>()` 即可实时刷新开关 / 滑块等控件。
+class ConfigService extends ChangeNotifier {
   static const _kKernelId = 'kernel.selected_id';
   static const _kHomePage = 'browser.home_page';
   static const _kSearchEngine = 'browser.search_engine';
@@ -17,6 +22,7 @@ class ConfigService {
   static const _kHomeShortcuts = 'home.shortcut_count';
   static const _kHomeRecent = 'home.show_recent';
   static const _kAutoSniff = 'sniff.auto';
+  static const _kStyleMode = 'ui.style_mode';
 
   final SharedPreferences _prefs;
 
@@ -29,33 +35,45 @@ class ConfigService {
     return ConfigService._(await SharedPreferences.getInstance());
   }
 
-  /// 选中的内核 id；null 表示使用平台默认系统内核
-  String? get selectedKernelId => _prefs.getString(_kKernelId);
-  Future<void> setSelectedKernelId(String? id) async {
-    if (id == null) {
-      await _prefs.remove(_kKernelId);
-    } else {
-      await _prefs.setString(_kKernelId, id);
-    }
+  /// 写入后统一通知，保证 UI 实时更新
+  Future<void> _apply(Future<void> Function() write) async {
+    await write();
+    notifyListeners();
   }
 
-  String get homePage =>
-      _prefs.getString(_kHomePage) ?? 'about:home';
+  /// 选中的内核 id；null 表示使用平台默认系统内核
+  String? get selectedKernelId => _prefs.getString(_kKernelId);
+  Future<void> setSelectedKernelId(String? id) => _apply(() async {
+        if (id == null) {
+          await _prefs.remove(_kKernelId);
+        } else {
+          await _prefs.setString(_kKernelId, id);
+        }
+      });
+
+  String get homePage => _prefs.getString(_kHomePage) ?? 'about:home';
   Future<void> setHomePage(String value) =>
-      _prefs.setString(_kHomePage, value);
+      _apply(() => _prefs.setString(_kHomePage, value));
 
   String get searchEngine =>
       _prefs.getString(_kSearchEngine) ?? 'https://www.bing.com/search?q={q}';
   Future<void> setSearchEngine(String value) =>
-      _prefs.setString(_kSearchEngine, value);
+      _apply(() => _prefs.setString(_kSearchEngine, value));
 
   bool get jsEnabled => _prefs.getBool(_kJsEnabled) ?? true;
-  Future<void> setJsEnabled(bool value) => _prefs.setBool(_kJsEnabled, value);
+  Future<void> setJsEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kJsEnabled, value));
 
   /// 是否强制只允许白名单插件
   bool get enforceTrustedOnly => _prefs.getBool(_kEnforceTrusted) ?? false;
   Future<void> setEnforceTrustedOnly(bool value) =>
-      _prefs.setBool(_kEnforceTrusted, value);
+      _apply(() => _prefs.setBool(_kEnforceTrusted, value));
+
+  /// 视觉风格（Material / Cupertino）
+  AppStyleMode get styleMode =>
+      parseAppStyleMode(_prefs.getString(_kStyleMode));
+  Future<void> setStyleMode(AppStyleMode mode) =>
+      _apply(() => _prefs.setString(_kStyleMode, mode.name));
 
   /// 桌面模式配置
   DesktopModeConfig get desktopMode {
@@ -70,26 +88,27 @@ class ConfigService {
   }
 
   Future<void> setDesktopMode(DesktopModeConfig cfg) =>
-      _prefs.setString(_kDesktopMode, jsonEncode(cfg.toJson()));
+      _apply(() => _prefs.setString(_kDesktopMode, jsonEncode(cfg.toJson())));
 
   /// 网页阅读与显示增强设置
   WebEnhanceSettings get webEnhance =>
       WebEnhanceSettings.decode(_prefs.getString(_kWebEnhance));
   Future<void> setWebEnhance(WebEnhanceSettings value) =>
-      _prefs.setString(_kWebEnhance, value.encode());
+      _apply(
+          () => _prefs.setString(_kWebEnhance, jsonEncode(value.encode())));
 
   /// 新标签页快捷方式数量（4 - 16）
   int get homeShortcutCount => _prefs.getInt(_kHomeShortcuts) ?? 8;
-  Future<void> setHomeShortcutCount(int value) =>
-      _prefs.setInt(_kHomeShortcuts, value.clamp(4, 16));
+  Future<void> setHomeShortcutCount(int value) => _apply(
+      () => _prefs.setInt(_kHomeShortcuts, value.clamp(4, 16)));
 
   /// 新标签页是否展示「最近访问」
   bool get homeShowRecent => _prefs.getBool(_kHomeRecent) ?? true;
   Future<void> setHomeShowRecent(bool value) =>
-      _prefs.setBool(_kHomeRecent, value);
+      _apply(() => _prefs.setBool(_kHomeRecent, value));
 
   /// 自动资源嗅探：页面加载后自动检测媒体并提示
   bool get autoSniff => _prefs.getBool(_kAutoSniff) ?? true;
   Future<void> setAutoSniff(bool value) =>
-      _prefs.setBool(_kAutoSniff, value);
+      _apply(() => _prefs.setBool(_kAutoSniff, value));
 }

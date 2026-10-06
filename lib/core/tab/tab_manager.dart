@@ -87,7 +87,16 @@ class TabManager extends ChangeNotifier {
     this.userscriptManager,
     this.desktopModePrefs,
     this.webEnhance,
-  });
+  }) {
+    // 配置变化（如 JS 开关、风格）时实时同步到所有标签内核
+    config.addListener(_applyConfigToKernels);
+  }
+
+  void _applyConfigToKernels() {
+    for (final t in _tabs) {
+      t.kernel.setJavaScriptEnabled(config.jsEnabled);
+    }
+  }
 
   List<TabModel> get tabs => List.unmodifiable(_tabs);
 
@@ -209,6 +218,8 @@ class TabManager extends ChangeNotifier {
     ));
 
     tab.kernel.bridge.registerAll(hostApi.handlers());
+    // 应用当前 JS 开关
+    await tab.kernel.setJavaScriptEnabled(config.jsEnabled);
     _wireStreams(tab);
 
     // 应用桌面模式（UA / 视口 / DPR）
@@ -438,6 +449,7 @@ class TabManager extends ChangeNotifier {
 
   @override
   void dispose() {
+    config.removeListener(_applyConfigToKernels);
     _userscriptRequestCtrl.close();
     _notificationCtrl.close();
     _sniffHintCtrl.close();

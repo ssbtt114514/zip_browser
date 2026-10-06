@@ -87,6 +87,8 @@ class StubKernel implements BrowserKernel {
 
   // —— 增强能力（占位：空实现）——
   @override
+  Future<void> setJavaScriptEnabled(bool enabled) async {}
+  @override
   Future<void> setUserAgent(String? userAgent) async {}
   @override
   Future<void> setDesktopMode(DesktopModeConfig config) async {}

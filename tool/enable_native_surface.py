@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-将 native_plugins/zb_native_surface 集成进 Flutter Windows 构建。
+将 native_plugins/zb_native_surface 集成进 Flutter 构建（Windows + Android）。
 
-前置：已执行 `flutter create --platforms=windows .` 生成 windows/ 目录。
+前置：已执行 `flutter create --platforms=windows,android .` 生成平台目录。
 用法：python tool/enable_native_surface.py
 幂等：重复执行不会重复追加。
 """
 import os
+import shutil
 import sys
 
 # Windows 控制台默认编码可能不是 UTF-8，显式切换以避免中文输出报 UnicodeEncodeError
@@ -15,7 +16,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WIN_DIR = os.path.join(ROOT, "windows")
+AND_DIR = os.path.join(ROOT, "android")
 
+SURFACE = os.path.join(ROOT, "native_plugins", "zb_native_surface")
+
+# ============================ Windows ============================
 MARK_CMAKE = "# >>> zip_browser native surface >>>"
 MARK_RUNNER = "// >>> zip_browser native surface >>>"
 
@@ -33,23 +38,19 @@ target_link_libraries(${BINARY_NAME} PRIVATE flutter_wrapper_plugin)
 # <<< zip_browser native surface <<<
 """
 
-# 模板里引擎成员名是 flutter_controller_；FlutterEngine 继承 PluginRegistry，
-# 用 GetRegistrarForPlugin(名字) 取得 FlutterDesktopPluginRegistrarRef。
 RUNNER_SNIPPET = """  // >>> zip_browser native surface >>>
   ZipBrowserNativeSurfacePluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin(
           "ZipBrowserNativeSurface"));
-  // <<< zip_browser native surface <<<
+  // <<< zip_browser native surface >>>
 """
 
 RUNNER_INCLUDE = '#include "zb_native_surface_plugin.h"'
 
 
 def patch_cmake():
-    # add_executable 位于 windows/runner/CMakeLists.txt（新版 Flutter）
     path = os.path.join(WIN_DIR, "runner", "CMakeLists.txt")
     if not os.path.exists(path):
-        # 兼容旧布局：顶层 windows/CMakeLists.txt
         legacy = os.path.join(WIN_DIR, "CMakeLists.txt")
         if os.path.exists(legacy) and "add_executable" in open(
                 legacy, encoding="utf-8").read():
@@ -74,8 +75,6 @@ def patch_runner():
     changed = False
 
     if MARK_RUNNER not in text:
-        # 优先紧跟引擎插件注册调用；否则退回其他 *_RegisterWithRegistrar 调用之后；
-        # 再退回到 Run() 的 return 前。
         lines = text.splitlines(keepends=True)
         insert_idx = None
         for i, line in enumerate(lines):
@@ -113,18 +112,88 @@ def patch_runner():
     return True, "flutter_window.cpp 已包含 surface 注册"
 
 
+# ============================ Android ============================
+ANDROID_PATCH_OPEN = "// >>> zip_browser native surface >>>"
+
+GRADLE_SNIPPET = """    // >>> zip_browser native surface >>>
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
+    // <<< zip_browser native surface <<<
+"""
+
+
+def integrate_android():
+    if not os.path.isdir(AND_DIR):
+        print("SKIP 未找到 android/ 目录（跳过 Android 集成）")
+        return
+
+    kt_dst_dir = os.path.join(
+        AND_DIR, "app", "src", "main", "kotlin", "com", "zipbrowser",
+        "zip_browser")
+    os.makedirs(kt_dst_dir, exist_ok=True)
+
+    # Kotlin 插件
+    shutil.copyfile(
+        os.path.join(SURFACE, "android", "NativeSurfacePlugin.kt"),
+        os.path.join(kt_dst_dir, "NativeSurfacePlugin.kt"))
+    print("OK   复制 NativeSurfacePlugin.kt")
+
+    # MainActivity（注册插件）
+    shutil.copyfile(
+        os.path.join(SURFACE, "android", "MainActivity.kt"),
+        os.path.join(kt_dst_dir, "MainActivity.kt"))
+    print("OK   写入 MainActivity.kt（已注册 surface 插件）")
+
+    # cpp + CMake
+    cpp_dst = os.path.join(AND_DIR, "app", "src", "main", "cpp")
+    os.makedirs(cpp_dst, exist_ok=True)
+    shutil.copyfile(
+        os.path.join(SURFACE, "android", "zb_native_surface_jni.cpp"),
+        os.path.join(cpp_dst, "zb_native_surface_jni.cpp"))
+    shutil.copyfile(
+        os.path.join(SURFACE, "android", "CMakeLists.txt"),
+        os.path.join(cpp_dst, "CMakeLists.txt"))
+    print("OK   复制 cpp 与 CMakeLists.txt")
+
+    # patch app/build.gradle.kts
+    gradle = os.path.join(AND_DIR, "app", "build.gradle.kts")
+    if os.path.exists(gradle):
+        text = open(gradle, encoding="utf-8").read()
+        if ANDROID_PATCH_OPEN in text:
+            print("OK   build.gradle.kts 已包含 externalNativeBuild")
+        else:
+            anchor = "    buildTypes {"
+            if anchor in text:
+                text = text.replace(anchor, GRADLE_SNIPPET + anchor, 1)
+            else:
+                text = text.replace("android {\n",
+                                    "android {\n" + GRADLE_SNIPPET, 1)
+            open(gradle, "w", encoding="utf-8").write(text)
+            print("OK   build.gradle.kts 已注入 externalNativeBuild")
+    else:
+        print("WARN 未找到 android/app/build.gradle.kts")
+
+
 def main():
-    if not os.path.isdir(WIN_DIR):
-        print("错误：未找到 windows/ 目录，请先执行 flutter create --platforms=windows .")
-        sys.exit(1)
+    did = False
+    if os.path.isdir(WIN_DIR):
+        for fn in (patch_cmake, patch_runner):
+            ok, msg = fn()
+            print(("OK   " if ok else "FAIL ") + msg)
+            if not ok:
+                sys.exit(1)
+        did = True
+    else:
+        print("SKIP 未找到 windows/ 目录")
 
-    for fn in (patch_cmake, patch_runner):
-        ok, msg = fn()
-        print(("OK   " if ok else "FAIL ") + msg)
-        if not ok:
-            sys.exit(1)
+    integrate_android()
+    did = True
 
-    print("\n完成。下次 flutter run -d windows 将包含原生表面插件。")
+    if did:
+        print("\n完成。下次构建将包含原生表面插件。")
 
 
 if __name__ == "__main__":
