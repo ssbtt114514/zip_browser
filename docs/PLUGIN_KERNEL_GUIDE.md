@@ -64,6 +64,10 @@ example_plugins/hello_ffi_kernel/kernels/windows/zb_example_kernel.dll
 
 （也可用 LLVM：脚本会自动探测 clang。）
 
+Android 平台（arm64-v8a / armeabi-v7a / x86_64）的 NDK clang 编译命令与产物打包，
+见 `example_plugins/hello_ffi_kernel/README.md`；三平台自动构建由 GitHub Actions
+工作流 `.github/workflows/build-kernel.yml` 完成。
+
 ---
 
 ## 四、打包并安装插件
