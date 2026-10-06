@@ -22,6 +22,10 @@ pubspec.lock
 /ios/
 /web/
 
+# flutter create 补齐的模板测试（引用模板类 MyApp，不适用于本项目；
+# CI 里也会在跑 analyze / test 之前显式删除）
+/test/widget_test.dart
+
 # 打包产物
 *.zip
 *.zbk
