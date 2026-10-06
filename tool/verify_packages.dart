@@ -10,11 +10,16 @@
 ///   dart run tool/verify_packages.dart lite_kernel.zip hello_ffi_kernel.zip zb_lite_kernel.zbk
 ///   dart run tool/verify_packages.dart --dir dist/packages
 ///
+/// `--dir` 会把目录里所有 .zip/.zbk 都试一遍；其中不含任何清单的（CI 上传的
+/// artifact 容器，如 `kernel-windows-dll.zip`）会被跳过并单独列出，
+/// 不计入失败 —— 它们本来就不是可安装的包。
+///
 /// 退出码：0 = 全部通过；1 = 存在校验失败。
 library;
 
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:zip_browser/core/kernel/kernel_package.dart';
 import 'package:zip_browser/core/plugin/plugin_manifest.dart';
@@ -22,6 +27,7 @@ import 'package:zip_browser/core/plugin/plugin_package.dart';
 
 int _failures = 0;
 int _checks = 0;
+final List<String> _skipped = <String>[];
 
 void _ok(String msg) => stdout.writeln('  [OK]   $msg');
 
@@ -144,6 +150,33 @@ void _verifyKernelPackage(File zbk, Directory tempRoot) {
   }
 }
 
+/// 一个 zip 里是否有插件/内核清单，即它是不是一个「可安装的包」。
+///
+/// CI 上传的 artifact 里混着两类 zip：一类是真正的包（`lite_kernel.zip`），
+/// 另一类是 artifact 容器（`kernel-windows-dll.zip` 里只有
+/// `lite_kernel/kernels/windows/...`）。后者根本不是包，把它当失败报出来
+/// 只会掩盖真正的问题 —— 所以显式跳过它，并说明为什么跳过。
+bool _looksInstallable(File f) {
+  try {
+    final archive = ZipDecoder().decodeBytes(f.readAsBytesSync());
+    for (final e in archive.files) {
+      if (!e.isFile) continue;
+      final name = e.name.replaceAll('\\', '/');
+      if (name == 'manifest.json' || name.endsWith('/manifest.json')) {
+        return true;
+      }
+      if (name == kKernelManifestEntry ||
+          name.endsWith('/$kKernelManifestEntry')) {
+        return true;
+      }
+    }
+    return false;
+  } catch (_) {
+    // 解不开就交给后面的安装流程去报错，别在这里把真正的坏包吞掉。
+    return true;
+  }
+}
+
 List<File> _collect(List<String> args) {
   final files = <File>[];
   for (var i = 0; i < args.length; i++) {
@@ -191,6 +224,10 @@ void main(List<String> args) {
   final tempRoot = Directory.systemTemp.createTempSync('zb_pkg_verify_');
   try {
     for (final f in files) {
+      if (!_looksInstallable(f)) {
+        _skipped.add(f.path);
+        continue;
+      }
       if (f.path.endsWith('.zbk')) {
         _verifyKernelPackage(f, tempRoot);
       } else {
@@ -201,6 +238,15 @@ void main(List<String> args) {
     try {
       tempRoot.deleteSync(recursive: true);
     } catch (_) {}
+  }
+
+  if (_skipped.isNotEmpty) {
+    stdout.writeln('\n跳过 ${_skipped.length} 个不是安装包的文件'
+        '（zip 内既无 manifest.json 也无 $kKernelManifestEntry，'
+        '多为 CI 的 artifact 容器）：');
+    for (final s in _skipped) {
+      stdout.writeln('  - $s');
+    }
   }
 
   stdout.writeln('\n共 $_checks 项校验，失败 $_failures 项');
