@@ -1,0 +1,45 @@
+name: build-windows
+
+# Windows 桌面版必须在 Windows 主机上构建（Flutter 不支持在 Linux 交叉编译），
+# 因此通过 GitHub Actions 的 windows-latest 运行器产出 exe 包。
+# 注意：仓库 .gitignore 忽略了根目录下的 windows/（由 flutter create 生成），
+#       因此 CI 必须先执行 flutter create 生成 windows 工程骨架。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Generate Windows platform files
+        run: flutter create --platforms=windows --org com.zipbrowser --project-name zip_browser .
+
+      - name: Integrate native surface plugin
+        run: python tool/enable_native_surface.py
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-browser-windows-x64
+          path: build/windows/x64/runner/Release/
+          if-no-files-found: error
