@@ -134,6 +134,11 @@ python tool/pack_plugin.py example_plugins/lite_kernel
 python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
 ```
 
+> 主机要求：`selftest` 任意平台可用；`linux` / `android-*` 需要 **Linux 或 macOS**
+> 主机（Android 还需 NDK）。脚本会主动拒绝在 Windows 上交叉编译 —— 因为那会把
+> PE 动态库写成 `.so`，一旦提交，Linux 用户拿到的将是一个无法加载的库。
+> Windows 版本请用 `tool\build_lite_kernel.bat`。
+
 源码在 `native_kernels/zb_lite_kernel/`，设计与协议见
 **[docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)**。
 

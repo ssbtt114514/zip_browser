@@ -10,6 +10,13 @@
 #    sh tool/build_lite_kernel.sh all          # 依次构建上面四个目标
 #    sh tool/build_lite_kernel.sh selftest     # 用本机 gcc/clang 编译并运行自检
 #
+#  主机要求：
+#    selftest  —— 任意平台（Windows 的 Git Bash / MSYS2 亦可）
+#    linux     —— 仅 Linux / macOS；Windows 上 `-shared` 产出的是 PE，
+#                 会被误写成 .so（实测与 DLL 同尺寸、文件头 MZ），因此脚本会拒绝
+#    android-* —— 仅 Linux / macOS，且需要 NDK
+#    Windows 版本请用：tool\build_lite_kernel.bat
+#
 #  产物（与 example_plugins/lite_kernel/manifest.json 的 kernel.libraries 对应）：
 #    linux               -> example_plugins/lite_kernel/kernels/linux/x86_64/libzb_lite_kernel.so
 #    android-arm64-v8a   -> example_plugins/lite_kernel/kernels/android/arm64-v8a/libzb_lite_kernel.so
@@ -61,6 +68,20 @@ find_ndk() {
 }
 
 build_linux() {
+    # 主机守卫：在 Windows（含 Git Bash / MSYS2 / Cygwin）上跑 `-shared` 得到的是
+    # PE 动态库，却被写成 .so —— 若被提交，Linux 用户拿到的将是一个无法加载的库。
+    # 实测 msys2 下产物与 Windows DLL 完全同尺寸、文件头为 MZ，故这里直接拒绝。
+    case "$(uname -s)" in
+        Linux|Darwin) ;;
+        *)
+            echo "[ERROR] build_linux 需要 Linux / macOS 主机，当前为 $(uname -s)。"
+            echo "        · Windows 版本请用：tool\\build_lite_kernel.bat"
+            echo "        · 需要 Linux 产物请在 WSL / Linux 主机 / CI 中构建"
+            echo "          （.github/workflows/build-kernel.yml 的 linux-so job 会产出真正的 ELF）"
+            return 1
+            ;;
+    esac
+
     CC=${CC:-cc}
     if ! command -v "$CC" >/dev/null 2>&1; then
         echo "[ERROR] 未找到 C 编译器：$CC（可用 CC=gcc 指定）"
@@ -87,7 +108,13 @@ build_android() {
     }
     case "$(uname -s)" in
         Darwin) HOST_TAG=darwin-x86_64 ;;
-        *)      HOST_TAG=linux-x86_64 ;;
+        Linux)  HOST_TAG=linux-x86_64 ;;
+        *)
+            echo "[ERROR] Android 交叉编译需要 Linux / macOS 主机，当前为 $(uname -s)。"
+            echo "        请在 WSL / Linux 主机 / CI 中构建"
+            echo "        （.github/workflows/build-kernel.yml 的 android-so job 会产出三 ABI 的 .so）"
+            return 1
+            ;;
     esac
     CC_NDK="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin/${TRIPLE}24-clang"
     if [ ! -x "$CC_NDK" ]; then
