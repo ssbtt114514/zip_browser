@@ -30,6 +30,11 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --org com.zipbrowser --project-name zip_browser .
 
+      # flutter create 会补齐模板自带的 test/widget_test.dart（其中引用模板类 MyApp，
+      # 与本项目的 ZipBrowserApp 不符），会让 flutter analyze 直接报错，这里移除它。
+      - name: Remove template widget test
+        run: rm -f test/widget_test.dart
+
       - name: Resolve dependencies
         run: flutter pub get
 
