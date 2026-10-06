@@ -362,13 +362,48 @@ jobs:
           path: zb_chromium_kernel.zbk
           if-no-files-found: error
 
+  # 3c) Gecko 渲染内核包（zb_gecko_kernel.zbk）
+  #
+  #     与 chromium-kernel 类似，不依赖 C 编译上游：跨平台 FFI 渲染库
+  #     （bin/，由 native_kernels/zb_engine_kernel 同源编译）随仓库入库，
+  #     本作业直接打包 + 用宿主安装器校验 + 上传。
+  #     --require-platforms 会逐一核对 Windows / Linux / Android 三平台
+  #     库文件真实存在，防止清单声明了、包里却没有。
+  # ---------------------------------------------------------------
+  gecko-kernel:
+    name: Gecko rendering kernel (.zbk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Pack .zbk
+        run: python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel zb_gecko_kernel.zbk
+
+      - name: Verify with the host installer (require all platforms)
+        run: |
+          ls -l zb_gecko_kernel.zbk
+          dart run tool/verify_packages.dart --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 zb_gecko_kernel.zbk
+
+      - name: Upload gecko kernel package
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-gecko-zbk
+          path: zb_gecko_kernel.zbk
+          if-no-files-found: error
+
   # ---------------------------------------------------------------
   # 4) 汇总：把各平台产物放回 manifest 声明的路径，再打包成插件 zip / .zbk
   # ---------------------------------------------------------------
   package:
     name: Package plugin zips
     runs-on: ubuntu-latest
-    needs: [windows-dll, android-so, linux-so, chromium-kernel]
+    needs: [windows-dll, android-so, linux-so, chromium-kernel, gecko-kernel]
     # 标签推送时要把包挂到 release 上，需要写权限（GITHUB_TOKEN 默认为只读）
     permissions:
       contents: write
@@ -527,9 +562,10 @@ jobs:
           cp "$CHROMIUM_ZBK" zb_chromium_kernel.zbk
           echo "已就位：zb_chromium_kernel.zbk（$(stat -c%s zb_chromium_kernel.zbk) 字节）"
 
-      # Gecko 引擎适配包：engine_adapter 不携带任何平台产物，包内只有
-      # kernel.json 与 README，因此这一步不依赖任何编译产物，必须能稳定产出。
-      - name: Pack gecko adapter package (.zbk)
+      # Gecko 渲染内核包：ffi 类型，携带 Windows / Linux / Android 三平台渲染库
+      # （bin/ 已入库，由 native_kernels/zb_engine_kernel 同源编译），打包不依赖
+      # 上游编译产物，必须能稳定产出。
+      - name: Pack gecko rendering kernel (.zbk)
         run: |
           test -f build_kernel_pkg/zb_gecko_kernel/kernel.json || {
             echo "::error::缺少 build_kernel_pkg/zb_gecko_kernel/kernel.json"; exit 1; }
@@ -552,9 +588,12 @@ jobs:
       - name: Verify chromium kernel package (strict runtime)
         run: dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
 
-      # Gecko 适配包：engine_adapter 不携带平台产物，断言全平台可用。
-      - name: Verify gecko adapter package
-        run: dart run tool/verify_packages.dart zb_gecko_kernel.zbk
+      # Gecko 渲染内核：ffi 类型，断言 Windows / Linux / Android 全平台库就位。
+      - name: Verify gecko rendering kernel
+        run: |
+          dart run tool/verify_packages.dart \
+            --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
+            zb_gecko_kernel.zbk
 
       - name: Upload plugin packages
         uses: actions/upload-artifact@v4

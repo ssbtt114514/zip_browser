@@ -7,7 +7,7 @@
   "engine": "chromium",
   "type": "webview2_fixed",
   "abi_version": 1,
-  "description": "随包分发的 WebView2 Fixed Version 运行时（Chromium/Edge 内核，仅 Windows x64）。装配与打包时由 tool/assemble_chromium_kernel.py 依据 msedgewebview2.exe 的真实版本号改写 version / engine_version；安装后在「内核管理」中选用，宿主以 WindowsSystemKernel(fixedRuntimeDir: <安装目录>/runtime) 启动，不再依赖系统 Evergreen WebView2，内核版本因此可长期钉住。运行时体积约 150-200MB，解包后占用更多磁盘空间。",
+  "description": "Chromium 内核包：Windows 随包分发 WebView2 Fixed Version 运行时（Chromium/Edge 内核，由 tool/assemble_chromium_kernel.py 依据 msedgewebview2.exe 真实版本改写 version / engine_version，安装后不再依赖系统 Evergreen WebView2，版本可长期钉住）；Linux / Android 无 WebView2，回落使用包内 FFI 渲染库（Chromium 标识，跨平台软件渲染，与 zb_lite_kernel 同 ABI）。运行时的 version 由装配脚本改写，不要手改。",
   "engine_version": "154.0.4258.62",
   "capabilities": [
     "loadUrl",
@@ -17,6 +17,13 @@
     "download",
     "devTools"
   ],
-  "libraries": {},
+  "libraries": {
+    "linux": "bin/linux/libzb_chromium_kernel.so",
+    "android": {
+      "arm64-v8a": "bin/android/arm64-v8a/libzb_chromium_kernel.so",
+      "armeabi-v7a": "bin/android/armeabi-v7a/libzb_chromium_kernel.so",
+      "x86_64": "bin/android/x86_64/libzb_chromium_kernel.so"
+    }
+  },
   "runtime_dir": "runtime"
 }

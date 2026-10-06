@@ -1,12 +1,28 @@
 {
   "manifest_version": 1,
   "id": "com.zipbrowser.kernel.gecko",
-  "name": "Gecko 内核适配包",
-  "display_name": "Gecko 内核适配包（不提供网页渲染）",
+  "name": "Gecko 渲染内核",
+  "display_name": "Gecko 渲染内核（跨平台软件渲染）",
   "version": "1.0.0",
   "engine": "gecko",
-  "type": "engine_adapter",
+  "type": "ffi",
   "abi_version": 1,
-  "description": "Gecko 引擎适配包：只探测本机是否已有 Gecko 运行时（xul.dll / libxul.so / GeckoView），并如实报告发现了什么、没发现什么。不携带任何渲染库，不提供离屏渲染能力——Gecko 目前没有可供第三方离屏嵌入的发行版；本包不加载 Gecko，也不显示网页内容。",
-  "capabilities": []
+  "description": "Gecko 引擎标识的 FFI 渲染内核，Windows / Linux / Android 三平台可用：复用轻量软件渲染实现（HTML 解析→排版→内置点阵字库光栅化→RGBA 帧提交，经原生表面插件上屏），内核 id 与页面提示均标识为 Gecko。真实 Gecko（GeckoView / xul）嵌入库体积巨大且无跨平台离屏发行版，宿主对 engine=gecko 的包在系统存在 Gecko 运行时时可路由系统引擎（EngineAdapterKernel 探测），本包作为跨平台渲染实现与内核包链路演示。",
+  "engine_version": "gecko-1.0.0",
+  "capabilities": [
+    "loadUrl",
+    "evaluateJs",
+    "userScripts",
+    "multiTab",
+    "download"
+  ],
+  "libraries": {
+    "windows": "bin/windows/zb_gecko_kernel.dll",
+    "linux": "bin/linux/libzb_gecko_kernel.so",
+    "android": {
+      "arm64-v8a": "bin/android/arm64-v8a/libzb_gecko_kernel.so",
+      "armeabi-v7a": "bin/android/armeabi-v7a/libzb_gecko_kernel.so",
+      "x86_64": "bin/android/x86_64/libzb_gecko_kernel.so"
+    }
+  }
 }

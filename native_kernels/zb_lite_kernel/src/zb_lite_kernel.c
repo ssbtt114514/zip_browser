@@ -23,9 +23,10 @@
 
 #include "zb_lite_internal.h"
 
-#define ZB_LITE_NAME "zb_lite_kernel"
-#define ZB_LITE_VERSION "1.0.0"
-#define ZB_LITE_DISPLAY_NAME "轻量文本内核"
+/* 引擎标识由 zb_lite_internal.h 提供（构建时可经 -D 覆盖） */
+#define ZB_LITE_NAME ZB_ENGINE_NAME
+#define ZB_LITE_VERSION ZB_ENGINE_VERSION
+#define ZB_LITE_DISPLAY_NAME ZB_ENGINE_DISPLAY_NAME
 
 #define ZB_FETCH_MAX_BYTES 2097152
 

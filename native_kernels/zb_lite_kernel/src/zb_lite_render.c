@@ -390,9 +390,9 @@ void zb_render_loading(zb_canvas *c, const zb_theme *th, const char *url, int ph
         zb_draw_centered(c, cyp + 78, line, 1, th->dim);
     }
 
-    /* 底部提示：本内核为轻量实现 */
+    /* 底部提示：本内核为轻量实现（引擎标识可由构建宏覆盖） */
     {
-        const char *hint = "zb_lite_kernel - lite text kernel (no JS engine)";
+        const char *hint = ZB_ENGINE_HINT;
         int tw = zb_text_width(hint, 1);
         if (tw < c->w - 8) {
             zb_draw_text(c, (c->w - tw) / 2, c->h - 22, hint, 1, th->dim, 0, 0, 0);

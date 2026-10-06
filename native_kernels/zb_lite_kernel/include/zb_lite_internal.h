@@ -21,6 +21,24 @@
 #include "zb_plugin_kernel_abi.h"
 
 /* ============================================================
+ *  引擎标识（可由构建系统用 -D 覆盖，用于派生同源内核变体）
+ *  zb_engine_kernel 通过覆盖这些宏产出 chromium / gecko 标识内核；
+ *  不覆盖时保持 lite 原始行为，零回归。
+ * ============================================================ */
+#ifndef ZB_ENGINE_NAME
+#define ZB_ENGINE_NAME "zb_lite_kernel"
+#endif
+#ifndef ZB_ENGINE_VERSION
+#define ZB_ENGINE_VERSION "1.0.0"
+#endif
+#ifndef ZB_ENGINE_DISPLAY_NAME
+#define ZB_ENGINE_DISPLAY_NAME "轻量文本内核"
+#endif
+#ifndef ZB_ENGINE_HINT
+#define ZB_ENGINE_HINT "zb_lite_kernel - lite text kernel (no JS engine)"
+#endif
+
+/* ============================================================
  *  通用上限（防止恶意 / 超大输入把内存打爆）
  * ============================================================ */
 #define ZB_MAX_HTML_BYTES (4 * 1024 * 1024) /* 单页 HTML 上限 */

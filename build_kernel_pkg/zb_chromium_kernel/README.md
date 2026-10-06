@@ -9,10 +9,17 @@
 | 清单 `id` | `com.zipbrowser.kernel.chromium` |
 | `type` | `webview2_fixed` |
 | `engine` | `chromium` |
-| `runtime_dir` | `runtime`（内含 `msedgewebview2.exe`） |
-| 平台 | 仅 **Windows**（x64 运行时；本包不含任何 FFI 动态库，`libraries` 为空对象） |
+| `runtime_dir` | `runtime`（内含 `msedgewebview2.exe`，仅 Windows 使用） |
+| 平台 | **Windows**：WebView2 Fixed Version 运行时（x64）；**Linux / Android**：回落包内 FFI 渲染库 `bin/`（Chromium 标识，跨平台软件渲染） |
 | 产物大小 | 约 **150-200 MB**（`.zbk`）；解包后磁盘占用更大（约 180 MB 级） |
 | 版本字段 | 由装配脚本按 `msedgewebview2.exe` 的真实 PE 版本号改写，不是手填 |
+
+> 跨平台说明：`kernel.json` 的 `libraries` 声明了 `linux` 与 `android`（三个 ABI）
+> 的 FFI 渲染库（与 `zb_lite_kernel` 同 ABI，经 `zb_engine_kernel` 构建，引擎标识为
+> `zb_chromium_kernel`）。宿主内核注册逻辑：Windows 上 `runtimeDir` 存在 → 用
+> `WindowsSystemKernel(fixedRuntimeDir:)`（WebView2 Fixed Version）；Linux / Android 上
+> 无运行时 → 回落 `FfiBrowserKernel` 加载 `bin/` 渲染库。因此 Chromium 内核包在
+> 三平台都可安装、切换、显示画面。
 
 ## 四步流程
 
