@@ -9,9 +9,16 @@ name: build-kernel
 #
 # 产物目录严格对应 example_plugins/*/manifest.json 中 kernel.libraries 的声明，
 # 打包脚本 tool/pack_plugin.py 会以插件目录为 zip 根，得到可直接安装的插件包。
+# 触发说明（这里有个容易踩的坑）：
+#   GitHub 在 `push` 下**同时**指定 `tags` 与 `paths` 时，两个过滤器是"与"关系 ——
+#   于是只写 `tags: ['v*']` + `paths` 会导致主干推送完全不触发（实测：推送
+#   `.github/workflows/build-kernel.yml` 到 main 后没有任何 run）。
+#   因此这里显式声明 `branches: [main]`：分支与标签之间是"或"，两者都要过 paths。
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
     paths:
@@ -20,6 +27,8 @@ on:
       - 'example_plugins/hello_ffi_kernel/**'
       - 'native_plugins/zb_native_surface/include/**'
       - 'build_kernel_pkg/**'
+      - 'tool/build_lite_kernel.sh'
+      - 'tool/build_lite_kernel.bat'
       - 'tool/pack_plugin.py'
       - 'tool/pack_kernel.py'
       - '.github/workflows/build-kernel.yml'
@@ -28,6 +37,7 @@ on:
       - 'native_kernels/**'
       - 'example_plugins/lite_kernel/**'
       - 'tool/build_lite_kernel.sh'
+      - 'tool/build_lite_kernel.bat'
       - '.github/workflows/build-kernel.yml'
 
 env:
