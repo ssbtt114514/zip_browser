@@ -22,6 +22,9 @@ import re
 import sys
 import zipfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pack_common  # noqa: E402  （与打包器同目录的共用校验）
+
 # 与 Dart 侧 KernelManifest / KernelPackage 保持一致的校验规则
 SUPPORTED_TYPES = ("ffi", "webview2_fixed")
 SUPPORTED_ABI = 1
@@ -138,6 +141,18 @@ def pack_dir(src, out):
         for e in errors:
             print(f"  - {e}")
         return 1
+
+    # 清单声明了某个平台的库，包里就必须真的有这个文件；否则打出来的
+    # .zbk 会「声明得比实际多」，安装后该平台必然不可用。
+    missing = pack_common.missing_libraries(src, manifest, "kernel")
+    if missing:
+        return pack_common.report_missing(
+            src, missing, MANIFEST_ENTRY,
+            hint=("提示：独立内核包的库由插件内核目录装配而来，可先执行\n"
+                  "  python tool/assemble_kernel_pkg.py\n"
+                  "（它会从 example_plugins/lite_kernel/kernels 装配各平台产物；"
+                  "缺少的平台需先用 tool/build_lite_kernel.sh 或 "
+                  "tool\\build_lite_kernel.bat 构建，或直接取 CI 产物）"))
 
     count = write_zip(src, out)
     print(f"打包完成：{out}（{count} 个文件）")
