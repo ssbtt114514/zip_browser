@@ -194,7 +194,9 @@ extern "C" __declspec(dllexport) void zb_surface_submit_frame(
   {
     std::lock_guard<std::mutex> lock(g_map_mutex);
     auto it = g_surfaces.find(texture_id);
-    if (it == g_surfaces.end()) return;
+    if (it == g_surfaces.end()) {
+      return;
+    }
     state = it->second;
   }
 

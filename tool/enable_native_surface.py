@@ -27,6 +27,9 @@ target_include_directories(${BINARY_NAME} PRIVATE
   "${ZB_SURFACE_DIR}/windows")
 target_sources(${BINARY_NAME} PRIVATE
   "${ZB_SURFACE_DIR}/windows/zb_native_surface_plugin.cpp")
+# flutter_wrapper_plugin 提供 PluginRegistrar / PluginRegistrarManager 的实现
+# （runner 默认只链接了 flutter_wrapper_app，不含 plugin_registrar.cc）。
+target_link_libraries(${BINARY_NAME} PRIVATE flutter_wrapper_plugin)
 # <<< zip_browser native surface <<<
 """
 
