@@ -30,9 +30,12 @@ target_sources(${BINARY_NAME} PRIVATE
 # <<< zip_browser native surface <<<
 """
 
+# 模板里引擎成员名是 flutter_controller_；FlutterEngine 继承 PluginRegistry，
+# 用 GetRegistrarForPlugin(名字) 取得 FlutterDesktopPluginRegistrarRef。
 RUNNER_SNIPPET = """  // >>> zip_browser native surface >>>
   ZipBrowserNativeSurfacePluginRegisterWithRegistrar(
-      FlutterDesktopGetPluginRegistrar(runner_.get(), ""));
+      flutter_controller_->engine()->GetRegistrarForPlugin(
+          "ZipBrowserNativeSurface"));
   // <<< zip_browser native surface <<<
 """
 
@@ -68,12 +71,18 @@ def patch_runner():
     changed = False
 
     if MARK_RUNNER not in text:
-        # 插入到其他 *_RegisterWithRegistrar 调用之后；否则插入到 Run() 的 return 前
+        # 优先紧跟引擎插件注册调用；否则退回其他 *_RegisterWithRegistrar 调用之后；
+        # 再退回到 Run() 的 return 前。
         lines = text.splitlines(keepends=True)
         insert_idx = None
         for i, line in enumerate(lines):
-            if "RegisterWithRegistrar(" in line:
+            if "RegisterPlugins(" in line:
                 insert_idx = i + 1
+                break
+        if insert_idx is None:
+            for i, line in enumerate(lines):
+                if "RegisterWithRegistrar(" in line:
+                    insert_idx = i + 1
         if insert_idx is None:
             for i, line in enumerate(lines):
                 if line.strip().startswith("return true;"):
