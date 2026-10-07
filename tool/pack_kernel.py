@@ -9,6 +9,10 @@
     # 生成一个可直接安装的示例内核包（用于联调安装流程）
     python tool/pack_kernel.py --demo [输出.zbk]
 
+    # 按平台拆分打包（只含指定平台的库，libraries 同步改写）：
+    python tool/pack_kernel.py <内核目录> out-windows.zbk --platforms windows
+    python tool/pack_kernel.py <内核目录> out-android.zbk --platforms android
+
 内核包目录结构（.zbk 本质是 zip，路径以本目录为根）：
     kernel.json                必需：内核清单
     bin/windows/kernel.dll     按平台/ABI 存放的原生库
@@ -166,7 +170,8 @@ def report_webview2_runtime_errors(src, runtime_errors):
     return 1
 
 
-def iter_files(src):
+def iter_files(src, keep_platforms=None):
+    """遍历包目录。keep_platforms 非空时，只保留对应平台的 bin/ 子目录。"""
     for root, dirs, files in os.walk(src):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for f in files:
@@ -174,19 +179,40 @@ def iter_files(src):
                 continue
             full = os.path.join(root, f)
             arc = os.path.relpath(full, src).replace(os.sep, "/")
+            if keep_platforms and _skip_for_platforms(arc, keep_platforms):
+                continue
             yield full, arc
 
 
-def write_zip(src, out):
+def _skip_for_platforms(arc, keep_platforms):
+    """判断文件是否不属于保留平台（仅过滤 bin/ 与 runtime/）。"""
+    # 平台库文件：bin/<platform>/…（android 下按 ABI 再分）
+    if arc.startswith("bin/"):
+        top = arc.split("/")[1] if arc.count("/") >= 1 else ""
+        return top not in keep_platforms
+    # WebView2 固定版本运行时只属于 Windows
+    if arc.startswith("runtime/"):
+        return "windows" not in keep_platforms
+    # kernel.json / README 等元数据始终保留
+    return False
+
+
+def write_zip(src, out, manifest=None, keep_platforms=None):
     count = 0
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for full, arc in iter_files(src):
+        if manifest is not None:
+            z.writestr(MANIFEST_ENTRY,
+                       json.dumps(manifest, ensure_ascii=False, indent=2))
+            count += 1
+        for full, arc in iter_files(src, keep_platforms=keep_platforms):
+            if arc == MANIFEST_ENTRY and manifest is not None:
+                continue  # 清单已按拆分平台改写，跳过原文件
             z.write(full, arc)
             count += 1
     return count
 
 
-def pack_dir(src, out):
+def pack_dir(src, out, platforms=None):
     manifest_path = os.path.join(src, MANIFEST_ENTRY)
     if not os.path.isfile(manifest_path):
         print(f"目录内未找到 {MANIFEST_ENTRY}：{src}")
@@ -208,7 +234,8 @@ def pack_dir(src, out):
 
     # webview2_fixed：清单声明 runtime_dir 后，还必须真的有运行时目录与
     # msedgewebview2.exe，否则安装后必然不可用。
-    if str(manifest.get("type", "ffi")).strip() == "webview2_fixed":
+    # （按平台拆分时跳过：拆分逻辑会按保留平台单独校验）
+    if platforms is None and str(manifest.get("type", "ffi")).strip() == "webview2_fixed":
         runtime_errors = check_webview2_runtime(src, manifest)
         if runtime_errors:
             return report_webview2_runtime_errors(src, runtime_errors)
@@ -225,8 +252,37 @@ def pack_dir(src, out):
                   "缺少的平台需先用 tool/build_lite_kernel.sh 或 "
                   "tool\\build_lite_kernel.bat 构建，或直接取 CI 产物）"))
 
-    count = write_zip(src, out)
+    # —— 按平台拆分打包 ——
+    # 用法：--platforms windows,linux,android
+    # 打出来的 .zbk 只含指定平台的库，libraries 同步改写。
+    # webview2_fixed 拆出非 Windows 包时自动降级为 ffi（此时包内只有
+    # FFI 渲染库，不再声明 runtime_dir）。
+    if platforms is not None:
+        pset = set(platforms)
+        manifest = dict(manifest)
+        libs = manifest.get("libraries") or {}
+        kept = {
+            k: v for k, v in libs.items()
+            if k in pset or (k == "android" and "android" in pset)
+        }
+        manifest["libraries"] = kept
+        if manifest.get("type") == "webview2_fixed" and "windows" not in pset:
+            manifest["type"] = "ffi"
+            manifest.pop("runtime_dir", None)
+        if "windows" not in pset:
+            manifest.pop("runtime_dir", None)
+        # 拆分后的 webview2_fixed（仅 windows）仍需真实运行时
+        if str(manifest.get("type", "ffi")).strip() == "webview2_fixed":
+            runtime_errors = check_webview2_runtime(src, manifest)
+            if runtime_errors:
+                return report_webview2_runtime_errors(src, runtime_errors)
+
+    count = write_zip(src, out,
+                      manifest=manifest if platforms is not None else None,
+                      keep_platforms=platforms)
     print(f"打包完成：{out}（{count} 个文件）")
+    if platforms is not None:
+        print(f"平台拆分：{','.join(platforms)} · 仅含这些平台的库")
     print(f"内核 id：{manifest['id']} · 类型：{manifest.get('type', 'ffi')}")
     return 0
 
@@ -283,13 +339,25 @@ def main():
         out = args[1] if len(args) > 1 else "zip-browser-kernel-demo.zbk"
         return pack_demo(out)
 
+    # 解析 --platforms windows,linux,android（拆分打包）
+    platforms = None
+    if "--platforms" in args:
+        idx = args.index("--platforms")
+        if idx + 1 < len(args):
+            platforms = [p.strip() for p in args[idx + 1].split(",")
+                         if p.strip()]
+            del args[idx:idx + 2]
+        if not platforms:
+            print("错误：--platforms 需要逗号分隔的平台列表（windows/linux/android）")
+            return 1
+
     src = os.path.abspath(args[0])
     if not os.path.isdir(src):
         print(f"目录不存在：{src}")
         return 1
 
     out = args[1] if len(args) > 1 else os.path.basename(src.rstrip(os.sep)) + ".zbk"
-    return pack_dir(src, out)
+    return pack_dir(src, out, platforms=platforms)
 
 
 if __name__ == "__main__":

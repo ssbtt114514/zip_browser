@@ -397,6 +397,118 @@ jobs:
           path: zb_gecko_kernel.zbk
           if-no-files-found: error
 
+  # 3d) 平台拆分包：每个内核按平台拆成独立 .zbk（按需下载，体积更小）。
+  #
+  #     zb_lite_kernel / zb_gecko_kernel：windows + linux + android 三包
+  #     zb_chromium_kernel：linux + android 两包（windows 用完整包，内含
+  #       WebView2 Fixed Version 运行时，拆包意义不大）。
+  #     需要上游编译产物归位 lite 内核的 bin/（gecko / chromium 库已随仓库入库）。
+  # ---------------------------------------------------------------
+  platform-split:
+    name: Platform-split kernel packages
+    runs-on: ubuntu-latest
+    needs: [windows-dll, android-so, linux-so]
+    steps:
+      - uses: actions/checkout@v4
+
+      # verify 步骤要用 `dart run tool/verify_packages.dart`
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Download kernel build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: kernel-windows-dll
+          merge-multiple: false
+
+      - name: Download linux/Android .so artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: kernel-linux-so
+          merge-multiple: false
+
+      - name: Download Android .so artifacts (all ABIs)
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: kernel-android-so-*
+          merge-multiple: false
+
+      - name: Assemble lite kernel bin (for split)
+        run: |
+          set -euo pipefail
+          copy_from() {
+            local src
+            src="$(find "$1" -type f -name "$2" -print -quit)"
+            if [ -z "$src" ]; then echo "::error::在 $1 中找不到 $2"; exit 1; fi
+            mkdir -p "$3"
+            cp "$src" "$3/"
+          }
+          BASE=build_kernel_pkg/zb_lite_kernel/bin
+          copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$BASE/windows"
+          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$BASE/linux"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$BASE/android/$abi"
+          done
+          find "$BASE" -type f | sort
+
+      - name: Pack platform-split kernel packages
+        run: |
+          set -euo pipefail
+          mkdir -p dist/split
+          # 双平台/全平台内核：三平台全拆
+          for pkg in zb_lite_kernel zb_gecko_kernel; do
+            for plat in windows linux android; do
+              python3 tool/pack_kernel.py "build_kernel_pkg/$pkg" \
+                "dist/split/$pkg-$plat.zbk" --platforms "$plat"
+            done
+          done
+          # Chromium：拆 linux / android（windows 用完整包）
+          for plat in linux android; do
+            python3 tool/pack_kernel.py build_kernel_pkg/zb_chromium_kernel \
+              "dist/split/zb_chromium_kernel-$plat.zbk" --platforms "$plat"
+          done
+          ls -lh dist/split
+
+      - name: Verify split packages
+        run: |
+          set -euo pipefail
+          for pkg in zb_lite_kernel zb_gecko_kernel; do
+            dart run tool/verify_packages.dart \
+              --require-platforms windows dist/split/$pkg-windows.zbk
+            dart run tool/verify_packages.dart \
+              --require-platforms linux dist/split/$pkg-linux.zbk
+            dart run tool/verify_packages.dart \
+              --require-platforms android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
+              dist/split/$pkg-android.zbk
+          done
+          dart run tool/verify_packages.dart \
+            --require-platforms linux dist/split/zb_chromium_kernel-linux.zbk
+          dart run tool/verify_packages.dart \
+            --require-platforms android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
+            dist/split/zb_chromium_kernel-android.zbk
+          echo "全部拆分包校验通过"
+
+      - name: Upload platform-split packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-platform-split
+          path: dist/split/*.zbk
+          if-no-files-found: error
+
+      # 打 v* tag 时把拆分包挂到 Release。
+      - name: Attach split packages to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/split/*.zbk
+          fail_on_unmatched_files: false
+
   # ---------------------------------------------------------------
   # 4) 汇总：把各平台产物放回 manifest 声明的路径，再打包成插件 zip / .zbk
   # ---------------------------------------------------------------

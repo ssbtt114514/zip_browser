@@ -64,36 +64,52 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
-      - name: Build release APK
+      # 按 CPU 架构拆分成 3 个安装包（arm64-v8a / armeabi-v7a / x86_64），
+      # 体积更小；另产一个 universal 全架构包（单包兼容所有设备）。
+      - name: Build split-per-abi APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build universal APK
         run: flutter build apk --release
 
-      - name: Collect APK
+      - name: Collect APKs
         run: |
           set -euo pipefail
           mkdir -p dist
-          src=build/app/outputs/flutter-apk/app-release.apk
-          test -f "$src" || { echo "::error::未找到 $src"; exit 1; }
-          cp "$src" dist/zip-browser-android-universal.apk
-          ls -l dist
+          src=build/app/outputs/flutter-apk
+          cp "$src/app-arm64-v8a-release.apk" dist/zip-browser-android-arm64-v8a.apk
+          cp "$src/app-armeabi-v7a-release.apk" dist/zip-browser-android-armeabi-v7a.apk
+          cp "$src/app-x86_64-release.apk" dist/zip-browser-android-x86_64.apk
+          cp "$src/app-release.apk" dist/zip-browser-android-universal.apk
+          ls -lh dist
 
-      # 只检查"文件存在"说明不了什么：真正要确认的是 APK 里确实有
-      # AndroidManifest、dex 与各 ABI 的 Flutter 引擎库，装机后能跑起来。
+      # 校验每个 APK 的 ABI 库与清单都在（而不是只检查"文件存在"）。
       - name: Verify APK contents
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import zipfile
-          path = 'dist/zip-browser-android-universal.apk'
-          with zipfile.ZipFile(path) as z:
-              names = z.namelist()
-              print('APK 条目数：', len(names))
-              libs = sorted(n for n in names if n.startswith('lib/'))
-              for n in libs:
-                  print('  ', n)
-              for need in ['AndroidManifest.xml', 'classes.dex', 'lib/arm64-v8a/libapp.so']:
-                  ok = need in names
-                  print(('[OK]   ' if ok else '[FAIL] '), need)
-                  assert ok, need
+          checks = {
+            'dist/zip-browser-android-arm64-v8a.apk': 'lib/arm64-v8a/libapp.so',
+            'dist/zip-browser-android-armeabi-v7a.apk': 'lib/armeabi-v7a/libapp.so',
+            'dist/zip-browser-android-x86_64.apk': 'lib/x86_64/libapp.so',
+            'dist/zip-browser-android-universal.apk': 'lib/arm64-v8a/libapp.so',
+          }
+          for path, need_lib in checks.items():
+              with zipfile.ZipFile(path) as z:
+                  names = z.namelist()
+                  print(path, '条目数：', len(names))
+                  libs = sorted(n for n in names if n.startswith('lib/'))
+                  print('  引擎库：', ' '.join(n.split('/')[1] for n in libs))
+                  for need in ['AndroidManifest.xml', 'classes.dex', need_lib]:
+                      ok = need in names
+                      print(('[OK]   ' if ok else '[FAIL] '), need)
+                      assert ok, f'{path}: 缺少 {need}'
+          # universal 应包含全部三个 ABI
+          with zipfile.ZipFile('dist/zip-browser-android-universal.apk') as z:
+              names = set(n for n in z.namelist() if n.startswith('lib/'))
+              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86_64'):
+                  assert any(n.startswith(f'lib/{abi}/') for n in names), f'universal 缺 {abi}'
           print('APK 内容校验通过')
           PY
 

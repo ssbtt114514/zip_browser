@@ -1,8 +1,9 @@
 name: build-linux
 
-# 构建 Linux 桌面版（Flutter Linux desktop，x86_64）并打包成 tar.gz。
-# Flutter 不支持交叉编译桌面版：Linux 产物只能在 Linux 主机上构建，
-# 因此这里用 ubuntu-latest 运行器。
+# 构建 Linux 桌面版并打包：x64（ubuntu-latest）与 arm64/aarch64（ubuntu-24.04-arm
+# 原生 ARM 运行器）两个架构；每个架构产出 tar.gz 与 .deb 安装包。
+# Flutter 不支持交叉编译桌面版：Linux 产物只能在同架构 Linux 主机上构建，
+# 因此用 GitHub 的 amd64 / arm64 原生运行器分别构建。
 #
 # 依赖说明：Linux 桌面版需要 GTK3 开发库与 clang/cmake/ninja；
 # libstdc++-12-dev 在 ubuntu-24.04 上是 Flutter 官方文档要求的包，
@@ -28,8 +29,18 @@ concurrency:
 
 jobs:
   linux:
-    name: Build Linux x64
-    runs-on: ubuntu-latest
+    name: Build Linux ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x64
+            arch: amd64
+            runner: ubuntu-latest
+          - label: aarch64
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
@@ -75,13 +86,21 @@ jobs:
       - name: Package tar.gz
         run: |
           set -euo pipefail
-          bundle=build/linux/x64/release/bundle
+          MACHINE=$(uname -m)
+          case "$MACHINE" in
+            x86_64) FLUTTER_ARCH=x64 ;;
+            aarch64) FLUTTER_ARCH=arm64 ;;
+            *) echo "::error::不支持的架构：$MACHINE"; exit 1 ;;
+          esac
+          echo "Flutter 架构目录：$FLUTTER_ARCH"
+          bundle=build/linux/$FLUTTER_ARCH/release/bundle
           test -d "$bundle" || { echo "::error::未找到 $bundle"; exit 1; }
           test -x "$bundle/zip_browser" || { echo "::error::未找到可执行文件 $bundle/zip_browser"; exit 1; }
           mkdir -p dist
-          # 顶层放一个 zip_browser/ 目录，解包后不会把文件撒在当前目录里
-          tar -czf dist/zip-browser-linux-x64.tar.gz -C "$(dirname "$bundle")" "$(basename "$bundle")"
-          ls -l dist
+          # 顶层放一个 bundle/ 目录，解包后不会把文件撒在当前目录里
+          tar -czf "dist/zip-browser-linux-${{ matrix.arch }}.tar.gz" \
+              -C "$(dirname "$bundle")" "$(basename "$bundle")"
+          ls -lh dist
 
       # 确认 tar 包里有可执行文件、Flutter 引擎库与 data 目录，
       # 而不只是"文件存在"。
@@ -90,12 +109,10 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import tarfile
-          path = 'dist/zip-browser-linux-x64.tar.gz'
+          path = 'dist/zip-browser-linux-${{ matrix.arch }}.tar.gz'
           with tarfile.open(path) as t:
               names = t.getnames()
               print('tar 条目数：', len(names))
-              for n in sorted(names)[:40]:
-                  print('  ', n)
               for need in ['bundle/zip_browser', 'bundle/lib/libflutter_linux_gtk.so']:
                   ok = need in names
                   print(('[OK]   ' if ok else '[FAIL] '), need)
@@ -103,13 +120,39 @@ jobs:
               assert any(n.startswith('bundle/data/') for n in names), 'bundle/data/ 缺失'
               print('tar 内容校验通过')
           PY
-          file build/linux/x64/release/bundle/zip_browser
 
-      - name: Upload Linux archive
+      # —— .deb 安装包 ——
+      - name: Pack .deb
+        run: |
+          set -euo pipefail
+          MACHINE=$(uname -m)
+          case "$MACHINE" in
+            x86_64) FLUTTER_ARCH=x64 ;;
+            aarch64) FLUTTER_ARCH=arm64 ;;
+          esac
+          bundle=build/linux/$FLUTTER_ARCH/release/bundle
+          VERSION=$(python3 -c \
+            "from pathlib import Path
+             line=[l for l in Path('pubspec.yaml').read_text().splitlines() if l.startswith('version:')][0]
+             print(line.split(':')[1].strip().split('+')[0])")
+          echo "打包版本：$VERSION · 架构：${{ matrix.arch }}"
+          python3 tool/pack_deb.py "$bundle" \
+            "dist/zip-browser-linux-${{ matrix.arch }}.deb" \
+            --version "$VERSION" --arch ${{ matrix.arch }}
+
+      - name: Verify .deb
+        run: |
+          set -euo pipefail
+          dpkg-deb --info dist/zip-browser-linux-${{ matrix.arch }}.deb | head -20
+          echo "--- 关键文件 ---"
+          dpkg-deb --contents dist/zip-browser-linux-${{ matrix.arch }}.deb | \
+            grep -E "usr/bin/zip-browser|libflutter|data/" | head -6
+
+      - name: Upload Linux archives
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-linux-x64
-          path: dist/*.tar.gz
+          name: zip-browser-linux-${{ matrix.arch }}
+          path: dist/*
           if-no-files-found: error
 
       # 打 v* tag 时挂到 Release；不开 generate_release_notes 以免覆盖人工说明。
@@ -117,5 +160,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: dist/*
           fail_on_unmatched_files: false
