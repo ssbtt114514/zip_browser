@@ -174,6 +174,7 @@ List<MainMenuEntry> mainMenuEntries(
         hint: 'Ctrl+Shift+B'),
     const MainMenuEntry('sniff_auto', Icons.satellite_alt_outlined, '自动嗅探媒体资源'),
     const MainMenuEntry('js', Icons.javascript_outlined, '启用 JavaScript'),
+    const MainMenuEntry('adblock', Icons.block_outlined, '广告拦截'),
     const MainMenuEntry('scan', Icons.qr_code_scanner, '扫一扫', dividerBefore: true),
     const MainMenuEntry('share', Icons.share, '分享'),
     const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
@@ -210,12 +211,14 @@ List<PopupMenuEntry<String>> _popupItems(
     if (e.value == 'desktop' ||
         e.value == 'bookmarks_bar' ||
         e.value == 'sniff_auto' ||
-        e.value == 'js') {
+        e.value == 'js' ||
+        e.value == 'adblock') {
       final checked = switch (e.value) {
         'desktop' => tab?.desktopMode.value ?? false,
         'bookmarks_bar' => config.showBookmarksBar,
         'sniff_auto' => config.autoSniff,
         'js' => config.jsEnabled,
+        'adblock' => config.adBlockEnabled,
         _ => false,
       };
       items.add(CheckedPopupMenuItem<String>(
@@ -299,6 +302,9 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
       await config.setAutoSniff(!config.autoSniff);
     case 'js':
       await config.setJsEnabled(!config.jsEnabled);
+      if (tab != null) await tab.kernel.reload();
+    case 'adblock':
+      await config.setAdBlockEnabled(!config.adBlockEnabled);
       if (tab != null) await tab.kernel.reload();
     case 'scan':
       await openQrScan(context);

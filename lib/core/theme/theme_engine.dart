@@ -195,6 +195,14 @@ class ThemeEngine {
           borderRadius: BorderRadius.circular(radius),
         ),
       ),
+      // 桌面端滚动条：细圆角、主题色滑块，观感更精致
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: WidgetStateProperty.all(8),
+        radius: const Radius.circular(8),
+        thumbColor: WidgetStateProperty.resolveWith(
+            (states) => isDark ? Colors.white24 : Colors.black26),
+        thumbVisibility: WidgetStateProperty.all(false),
+      ),
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           for (final p in TargetPlatform.values)

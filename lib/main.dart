@@ -25,6 +25,7 @@ import 'services/search_engines_service.dart';
 import 'services/session_service.dart';
 import 'services/ui_state.dart';
 import 'services/url_suggest_service.dart';
+import 'services/ad_blocker_service.dart';
 import 'services/web_enhance_service.dart';
 import 'services/zoom_service.dart';
 
@@ -65,18 +66,18 @@ Future<void> main() async {
   // 2b-2. 莫奈动态色板（Android 12+，其他平台返回 null）
   final MonetPalette? monetPalette =
       await DynamicColorPlugin.getCorePalette();
-
   // 2c. 搜索引擎
   final searchEngines = SearchEnginesService(config);
 
   // 2d. 桌面模式偏好
   final desktopModePrefs = DesktopModePreferences(config);
 
-  // 2e. 网页缩放（按站点记忆）
-  final zoomService = await ZoomService.create();
+  // 2e. 网页缩放（按站点记忆）与会话——并行发起，缩短启动时间
+  final zoomFuture = ZoomService.create();
+  final sessionFuture = SessionService.create();
+  final zoomService = await zoomFuture;
+  final sessionService = await sessionFuture;
 
-  // 2f. 会话（上次打开的标签页）
-  final sessionService = await SessionService.create();
 
   // 3. 数据服务：书签 / 历史 / 下载
   final bookmarks = BookmarksService(
@@ -123,6 +124,9 @@ Future<void> main() async {
   // 5c. 网页阅读与显示增强（滤镜 / 阅读模式 / 字号行距）
   final webEnhance = WebEnhanceService(config);
 
+  // 5d. 广告拦截（内置规则 + 用户自定义域名）
+  final adBlocker = AdBlockerService(config);
+
   // 6. 标签页管理器 + 宿主 bridge API
   final tabManager = TabManager(
     kernelRegistry: kernelRegistry,
@@ -137,6 +141,7 @@ Future<void> main() async {
     webEnhance: webEnhance,
     zoomService: zoomService,
     sessionService: sessionService,
+    adBlocker: adBlocker,
   );
   tabManager.hostApi = HostBridgeApi(
     tabManager: tabManager,

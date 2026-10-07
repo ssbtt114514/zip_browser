@@ -1,7 +1,7 @@
 /// 全局常量
 class BrowserConstants {
   /// 应用版本号（与 pubspec.yaml 的 version 保持一致）
-  static const String appVersion = '0.8.0';
+  static const String appVersion = '0.9.0';
 
   /// 请求桌面版网站时使用的 UA（Windows 桌面 Chrome）
   static const String desktopUserAgent =

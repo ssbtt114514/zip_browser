@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/constants.dart';
 import '../../core/kernel/kernel_registry.dart';
 import '../../core/kernel/kernel_types.dart';
 import '../../platform/windows_system_kernel.dart';
@@ -192,6 +193,49 @@ class SettingsPage extends StatelessWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  title: const Text('广告拦截',
+                      style: TextStyle(fontSize: 13.5)),
+                  subtitle: const Text('屏蔽常见广告/跟踪请求与页面广告位',
+                      style: TextStyle(fontSize: 11.5)),
+                  trailing: AdaptiveSwitch(
+                    value: config.adBlockEnabled,
+                    onChanged: config.setAdBlockEnabled,
+                  ),
+                ),
+                if (config.adBlockEnabled) ...[
+                  const Divider(height: 1),
+                  _NavTile(
+                    icon: Icons.edit_outlined,
+                    title: '自定义拦截域名',
+                    subtitle: config.adBlockCustomDomains.isEmpty
+                        ? '内置规则已启用，可追加自定义域名'
+                        : '已添加 ${config.adBlockCustomDomains.length} 个域名',
+                    onTap: () => _editDomains(
+                      context,
+                      title: '自定义拦截域名',
+                      hint: '每行一个域名，例如：ads.example.com',
+                      initial: config.adBlockCustomDomains,
+                      save: config.setAdBlockCustomDomains,
+                    ),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  _NavTile(
+                    icon: Icons.verified_user_outlined,
+                    title: '白名单域名',
+                    subtitle: config.adBlockAllowDomains.isEmpty
+                        ? '误拦截时可在此放行（优先于拦截规则）'
+                        : '已放行 ${config.adBlockAllowDomains.length} 个域名',
+                    onTap: () => _editDomains(
+                      context,
+                      title: '白名单域名',
+                      hint: '每行一个域名，例如：example.com',
+                      initial: config.adBlockAllowDomains,
+                      save: config.setAdBlockAllowDomains,
+                    ),
+                  ),
+                ],
+                const Divider(height: 1),
+                ListTile(
                   title: const Text('仅允许受信任白名单插件',
                       style: TextStyle(fontSize: 13.5)),
                   subtitle: const Text('开启后未在白名单中的 zip 将被拒绝安装',
@@ -206,8 +250,10 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const Center(
-            child: Text('Zip Browser 0.5.0 · 独立内核包 · 多平台浏览器框架',
-                style: TextStyle(fontSize: 11.5, color: Colors.black38)),
+            child: Text(
+              'Zip Browser ${BrowserConstants.appVersion} · 独立内核包 · 多平台浏览器框架',
+              style: TextStyle(fontSize: 11.5, color: Colors.black38),
+            ),
           ),
         ],
       ),
@@ -246,6 +292,53 @@ class SettingsPage extends StatelessWidget {
     if (url.contains('baidu.com')) return '百度';
     if (url.contains('you.com')) return 'You';
     return '自定义';
+  }
+
+  /// 编辑域名列表（逗号/换行/空格分隔）
+  Future<void> _editDomains(
+    BuildContext context, {
+    required String title,
+    required String hint,
+    required List<String> initial,
+    required Future<void> Function(List<String>) save,
+  }) async {
+    final controller = TextEditingController(text: initial.join('\n'));
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(hint, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              maxLines: 6,
+              minLines: 3,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: '每行一个域名',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    final domains = result
+        .split(RegExp(r'[\n,，;；\s]+'))
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+    await save(domains);
   }
 }
 

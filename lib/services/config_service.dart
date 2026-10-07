@@ -26,6 +26,9 @@ class ConfigService extends ChangeNotifier {
   static const _kBookmarksBar = 'ui.bookmarks_bar';
   static const _kBottomNav = 'ui.bottom_nav';
   static const _kClipboardDetect = 'ui.clipboard_detect';
+  static const _kAdBlock = 'content.ad_block';
+  static const _kAdBlockCustom = 'content.ad_block_custom';
+  static const _kAdBlockAllow = 'content.ad_block_allow';
 
   final SharedPreferences _prefs;
 
@@ -130,4 +133,36 @@ class ConfigService extends ChangeNotifier {
       _prefs.getBool(_kClipboardDetect) ?? true;
   Future<void> setClipboardDetectEnabled(bool value) =>
       _apply(() => _prefs.setBool(_kClipboardDetect, value));
+
+  // —— 内容过滤：广告拦截 ——
+  /// 广告拦截（默认开启）：注入拦截脚本，屏蔽常见广告/跟踪请求与元素
+  bool get adBlockEnabled => _prefs.getBool(_kAdBlock) ?? true;
+  Future<void> setAdBlockEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kAdBlock, value));
+
+  /// 用户自定义拦截域名（主域或完整域名，小写）
+  List<String> get adBlockCustomDomains =>
+      _stringList(_prefs.getString(_kAdBlockCustom));
+
+  Future<void> setAdBlockCustomDomains(List<String> domains) =>
+      _apply(() => _prefs.setString(
+          _kAdBlockCustom, jsonEncode(domains.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList())));
+
+  /// 白名单域名（放行优先级最高）
+  List<String> get adBlockAllowDomains =>
+      _stringList(_prefs.getString(_kAdBlockAllow));
+
+  Future<void> setAdBlockAllowDomains(List<String> domains) =>
+      _apply(() => _prefs.setString(
+          _kAdBlockAllow, jsonEncode(domains.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList())));
+
+  static List<String> _stringList(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final v = jsonDecode(raw);
+      return v is List ? v.whereType<String>().toList() : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
 }

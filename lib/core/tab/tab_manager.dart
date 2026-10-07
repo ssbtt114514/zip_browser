@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/ad_blocker_service.dart';
 import '../../services/bookmarks_service.dart';
 import '../../services/config_service.dart';
 import '../../services/desktop_mode_config.dart';
@@ -54,6 +55,7 @@ class TabManager extends ChangeNotifier {
   final WebEnhanceService? webEnhance;
   final ZoomService? zoomService;
   final SessionService? sessionService;
+  final AdBlockerService? adBlocker;
   late final HostBridgeApi hostApi;
 
   final List<TabModel> _tabs = [];
@@ -90,6 +92,11 @@ class TabManager extends ChangeNotifier {
   /// 供 host bridge 推送扩展通知
   void notifyExtension(String message) => _notificationCtrl.add(message);
 
+  /// 标签数量达到上限时的提示
+  void _notifyTabLimitReached(int maxTabs) {
+    notifyExtension('已达标签页上限（$maxTabs），请先关闭部分标签');
+  }
+
   TabManager({
     required this.kernelRegistry,
     required this.pluginManager,
@@ -103,6 +110,7 @@ class TabManager extends ChangeNotifier {
     this.webEnhance,
     this.zoomService,
     this.sessionService,
+    this.adBlocker,
   }) {
     // 配置变化（如 JS 开关、风格）时实时同步到所有标签内核
     config.addListener(_applyConfigToKernels);
@@ -320,7 +328,6 @@ class TabManager extends ChangeNotifier {
   // —— 标签生命周期 ——
 
   /// 新建标签页并加载 [url]（为 null 时加载主页）
-  ///
   /// [pinned] 固定标签；[activate] 是否切换过去（恢复会话时可设 false）。
   Future<TabModel> createTab({
     String? url,
@@ -328,6 +335,17 @@ class TabManager extends ChangeNotifier {
     bool pinned = false,
     bool activate = true,
   }) async {
+    // 标签上限保护：移动端每个标签持有一个 WebView，防止低端机内存爆掉
+    const maxTabs = 32;
+    if (_tabs.length >= maxTabs) {
+      _notifyTabLimitReached(maxTabs);
+      final existing = _tabs.last;
+      if (activate) {
+        _activeIndex = _tabs.length - 1;
+        notifyListeners();
+      }
+      return existing;
+    }
     final tabId =
         'tab_${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
     final kernel = kernelRegistry.createKernel(tabId);
@@ -356,7 +374,11 @@ class TabManager extends ChangeNotifier {
   Future<void> _initialize(TabModel tab, String address) async {
     final pluginScripts = pluginManager.collectUserScripts();
     final userScripts = userscriptManager?.collectScripts() ?? const [];
-    final scripts = [...pluginScripts, ...userScripts];
+    var scripts = [...pluginScripts, ...userScripts];
+    // 广告拦截（内置脚本，最先注入以便 hook 早于页面脚本）
+    if (config.adBlockEnabled) {
+      scripts = [adBlocker?.buildUserScript(), ...scripts].whereType<UserScript>().toList();
+    }
     final granted = pluginManager.grantedBridgeMethods();
 
     await tab.kernel.initialize(KernelViewConfig(
@@ -429,16 +451,22 @@ class TabManager extends ChangeNotifier {
     tab.kernel.navigationEvents.listen((event) async {
       if (event.stage == NavigationStage.finished) {
         tab.isLoading.value = false;
-        tab.canGoBack.value = await tab.kernel.canGoBack();
-        tab.canGoForward.value = await tab.kernel.canGoForward();
+        // 并行查询前进/后退能力，避免串行平台调用拖慢导航完成
+        final results = await Future.wait([
+          tab.kernel.canGoBack(),
+          tab.kernel.canGoForward(),
+        ]);
+        tab.canGoBack.value = results[0];
+        tab.canGoForward.value = results[1];
         // 隐私标签不写入历史
         if (!tab.isPrivate) {
           history.recordVisit(tab.url.value, tab.title.value);
         }
-        // 应用网页增强（阅读/滤镜/无图/字号）
-        await webEnhance?.applyTo(tab.kernel);
-        // 应用该站点记住的缩放倍率
-        await applyZoom(tab);
+        // 应用网页增强（阅读/滤镜/无图/字号）与站点缩放，互不依赖并行执行
+        await Future.wait([
+          webEnhance?.applyTo(tab.kernel) ?? Future.value(),
+          applyZoom(tab),
+        ]);
         // 自动资源嗅探：稍等资源上报后汇总，发现媒体则提示
         if (config.autoSniff) _scheduleSniffHint(tab);
         _scheduleSessionSave();

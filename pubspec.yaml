@@ -1,7 +1,7 @@
 name: zip_browser
 description: "可通过 zip 插件扩展功能与浏览器内核的多平台浏览器框架（Android / Windows / Linux，后续 macOS）"
 publish_to: "none"
-version: 0.8.0+10
+version: 0.9.0+11
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
