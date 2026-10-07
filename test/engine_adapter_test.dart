@@ -13,6 +13,7 @@ import 'package:zip_browser/core/kernel/kernel_registry.dart';
 import 'package:zip_browser/core/kernel/kernel_types.dart';
 import 'package:zip_browser/core/plugin/plugin_manager.dart';
 import 'package:zip_browser/platform/engine_adapter_kernel.dart';
+import 'package:zip_browser/platform/plugin_ffi_kernel.dart';
 import 'package:zip_browser/services/config_service.dart';
 
 /// 按 `tool/pack_kernel.py` 的规则（以源目录为 zip 根）在内存中打包，
@@ -353,7 +354,7 @@ void main() {
     Directory kernelsDir() =>
         Directory(p.join(root.path, 'kernels'))..createSync(recursive: true);
 
-    test('可安装，且不携带任何平台产物', () {
+    test('可安装，且声明了三平台 FFI 产物（gecko 已是真渲染内核）', () {
       final record = KernelPackage.install(
         zipBytes: zipDir('build_kernel_pkg/zb_gecko_kernel'),
         kernelsDir: kernelsDir(),
@@ -361,12 +362,13 @@ void main() {
 
       expect(record.id, 'com.zipbrowser.kernel.gecko');
       expect(record.kernelId, 'kernel.com.zipbrowser.kernel.gecko');
-      expect(record.manifest.type, 'engine_adapter');
+      expect(record.manifest.type, 'ffi');
       expect(record.manifest.engine, KernelEngine.gecko);
       expect(record.manifest.version, '1.0.0');
-      expect(record.manifest.libraries, isEmpty);
+      expect(record.manifest.libraries.keys,
+          containsAll(['windows', 'linux', 'android']));
       expect(record.manifest.runtimeDir, isNull);
-      expect(record.manifest.capabilities, isEmpty);
+      expect(record.manifest.capabilities, isNotEmpty);
       expect(record.isTampered, isFalse);
       expect(
         File(p.join(record.directory.path, 'kernel.json')).existsSync(),
@@ -376,7 +378,7 @@ void main() {
           isTrue);
     });
 
-    test('availableOn() 在所有平台为 true（外层验收脚本依赖此约定）', () {
+    test('availableOn() 三平台为 true，且各平台都解析出真实库文件', () {
       final record = KernelPackage.install(
         zipBytes: zipDir('build_kernel_pkg/zb_gecko_kernel'),
         kernelsDir: kernelsDir(),
@@ -385,7 +387,11 @@ void main() {
       expect(record.availableOn('windows'), isTrue);
       expect(record.availableOn('linux'), isTrue);
       expect(record.availableOn('android', abi: 'arm64-v8a'), isTrue);
-      expect(record.libraryPathFor('windows'), isNull);
+      expect(record.availableOn('android', abi: 'armeabi-v7a'), isTrue);
+      expect(record.availableOn('android', abi: 'x86_64'), isTrue);
+      expect(record.libraryPathFor('windows'), isNotNull);
+      expect(record.libraryPathFor('linux'), isNotNull);
+      expect(record.libraryPathFor('android', abi: 'arm64-v8a'), isNotNull);
       expect(record.runtimeDirPath, isNull);
     });
 
@@ -459,7 +465,7 @@ void main() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     });
 
-    test('在「内核管理」可见：描述项可用且标注为引擎适配包', () {
+    test('在「内核管理」可见：描述项可用且标注为 FFI 渲染内核', () {
       final described = registry
           .describe()
           .where((d) => d.id == 'kernel.com.zipbrowser.kernel.gecko')
@@ -467,11 +473,11 @@ void main() {
 
       expect(described, hasLength(1));
       final d = described.single;
-      expect(d.packageType, 'engine_adapter');
+      expect(d.packageType, 'ffi');
       expect(d.engine, KernelEngine.gecko);
       expect(d.origin, KernelOrigin.standalone);
       expect(d.available, isTrue);
-      expect(d.capabilities, isEmpty);
+      expect(d.capabilities, contains(KernelCapability.loadUrl));
       expect(d.unavailableReason, isNull);
 
       expect(
@@ -480,17 +486,21 @@ void main() {
       );
     });
 
-    test('选中后能构造出 EngineAdapterKernel（引擎为 gecko）', () async {
+    test('选中后能构造出 FfiBrowserKernel（引擎为 gecko）', () async {
       await config.setSelectedKernelId('kernel.com.zipbrowser.kernel.gecko');
       final kernel = registry.createKernel('tab-1');
 
-      expect(kernel, isA<EngineAdapterKernel>());
-      final adapter = kernel as EngineAdapterKernel;
-      expect(adapter.engine, KernelEngine.gecko);
-      expect(adapter.origin, KernelOrigin.standalone);
-      expect(adapter.capabilities, isEmpty);
-      expect(adapter.displayName, 'Gecko 内核适配包（不提供网页渲染）');
-      await adapter.dispose();
+      expect(kernel, isA<FfiBrowserKernel>());
+      final ffi = kernel as FfiBrowserKernel;
+      expect(ffi.source, isA<StandaloneKernelOffer>());
+      expect(
+        (ffi.source as StandaloneKernelOffer).package.manifest.engine,
+        KernelEngine.gecko,
+      );
+      expect(ffi.origin, KernelOrigin.standalone);
+      expect(ffi.capabilities, contains(KernelCapability.loadUrl));
+      expect(ffi.displayName, isNot(contains('适配包')));
+      await ffi.dispose();
     });
   });
 

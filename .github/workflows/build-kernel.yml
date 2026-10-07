@@ -408,6 +408,9 @@ jobs:
     name: Platform-split kernel packages
     runs-on: ubuntu-latest
     needs: [windows-dll, android-so, linux-so]
+    # 标签推送时要把拆分包挂到 release 上，需要写权限（GITHUB_TOKEN 默认为只读）
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 

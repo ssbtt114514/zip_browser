@@ -38,9 +38,13 @@ jobs:
           - label: x64
             arch: amd64
             runner: ubuntu-latest
+            flutter_version: 3.47.6
+          # GitHub 原生 ARM 运行器：subosito/flutter-action 在 arm64 上无法解析
+          # 固定版本号（如 3.47.6），这里改用最新 stable。
           - label: aarch64
             arch: arm64
             runner: ubuntu-24.04-arm
+            flutter_version: ''
     steps:
       - uses: actions/checkout@v4
 
@@ -52,9 +56,18 @@ jobs:
             libgtk-3-dev liblzma-dev
           sudo apt-get install -y libstdc++-12-dev || true
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter (pinned)
+        if: matrix.flutter_version != ''
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.47.6
+          flutter-version: ${{ matrix.flutter_version }}
+          channel: stable
+          cache: true
+
+      - name: Setup Flutter (latest stable)
+        if: matrix.flutter_version == ''
+        uses: subosito/flutter-action@v2
+        with:
           channel: stable
           cache: true
 

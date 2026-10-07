@@ -290,8 +290,11 @@ def manifest_mismatches(m):
         bad.append(f'"type" 应为 webview2_fixed，实际 {m.get("type")!r}')
     if not m.get("runtime_dir"):
         bad.append('"runtime_dir" 不能为空（webview2_fixed 靠它定位运行时）')
-    if m.get("libraries"):
-        bad.append('"libraries" 应为空对象（webview2_fixed 不用 FFI 库）')
+    # chromium 双模式包：windows 走固定版本运行时，linux/android 允许携带 FFI 回落库；
+    # 唯一禁止的是 windows 声明为 FFI 库（windows 必须走运行时目录）。
+    libraries = m.get("libraries") or {}
+    if libraries.get("windows"):
+        bad.append('"libraries" 不应包含 windows（windows 走运行时目录，不用 FFI 库）')
     if m.get("manifest_version") != MANIFEST_VERSION:
         bad.append(f'"manifest_version" 应为 {MANIFEST_VERSION}')
     if m.get("abi_version") != ABI_VERSION:
