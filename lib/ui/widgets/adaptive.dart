@@ -18,12 +18,14 @@ class AdaptiveSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    // 打开时滑块用「背景色」：Material 由 switchTheme 统一处理；
+    // Cupertino 原生开启滑块即白色（背景色），轨道保持主题色，无需覆写。
     if (_isCupertino(context)) {
       return CupertinoSwitch(
         value: value,
         onChanged: onChanged,
-        activeTrackColor: primary,
+        activeTrackColor: theme.colorScheme.primary,
       );
     }
     return Switch(value: value, onChanged: onChanged);

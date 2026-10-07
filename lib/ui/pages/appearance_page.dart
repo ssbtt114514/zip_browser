@@ -1,13 +1,48 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/appearance_settings.dart';
 import '../../core/theme/style_mode.dart';
 import '../../services/config_service.dart';
+import '../../services/font_service.dart';
 
 /// 外观自定义页：主题模式、主色、强调色、字体、密度、圆角、起始页背景、纯黑模式
 class AppearancePage extends StatelessWidget {
   const AppearancePage({super.key});
+
+  /// 导入自定义字体：选文件 → 复制并注册 → 立即启用
+  Future<void> _importCustomFont(BuildContext context) async {
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['ttf', 'otf'],
+        dialogTitle: '选择字体文件',
+      );
+      if (res == null || res.files.isEmpty) return;
+      final path = res.files.single.path;
+      if (path == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('无法读取所选文件路径')));
+        }
+        return;
+      }
+      final family = await FontService.importFont(path);
+      if (!context.mounted) return;
+      final s = context.read<AppearanceSettings>();
+      await s.setFontFamily(family);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('自定义字体已导入并启用')));
+      }
+    } on Exception catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('导入失败：${e.toString()}')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +188,45 @@ class AppearancePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          // —— 字体（内置 OPPO Sans / 系统默认 / 导入自定义）——
+          const _SectionTitle('字体'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.font_download_outlined),
+                  title: const Text('默认字体'),
+                  subtitle: const Text('内置 OPPO Sans，免费商用，中文显示更统一'),
+                  trailing: s.fontFamily == FontService.kBuiltInFamily
+                      ? const Icon(Icons.check, size: 20)
+                      : null,
+                  onTap: () => s.setFontFamily(FontService.kBuiltInFamily),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.phonelink_setup_outlined),
+                  title: const Text('跟随系统'),
+                  subtitle: const Text('使用系统默认字体'),
+                  trailing: s.fontFamily.isEmpty ? const Icon(Icons.check, size: 20) : null,
+                  onTap: () => s.setFontFamily(FontService.kSystemFamily),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_box_outlined),
+                  title: const Text('导入自定义字体'),
+                  subtitle: Text(
+                    s.fontFamily == FontService.kCustomFamily
+                        ? '已启用：ZipCustomFont'
+                        : '选择本地 .ttf / .otf 字体文件',
+                  ),
+                  trailing: s.fontFamily == FontService.kCustomFamily
+                      ? const Icon(Icons.check, size: 20)
+                      : null,
+                  onTap: () => _importCustomFont(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // —— 字体缩放 ——
           const _SectionTitle('字体大小'),
           Card(
@@ -232,13 +306,26 @@ class AppearancePage extends StatelessWidget {
           // —— 浏览器界面（Firefox 风格）——
           const _SectionTitle('浏览器界面'),
           Card(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.space_dashboard_outlined),
-              title: const Text('底部导航栏'),
-              subtitle: const Text('窄屏时显示 Firefox 风格悬浮底部导航（后退 / 前进 / 主页 / 扫一扫 / 菜单）'),
-              value: context.watch<ConfigService>().bottomNavEnabled,
-              onChanged: (v) =>
-                  context.read<ConfigService>().setBottomNavEnabled(v),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.space_dashboard_outlined),
+                  title: const Text('底部导航栏'),
+                  subtitle: const Text('窄屏时显示 Firefox 风格悬浮底部导航（后退 / 前进 / 主页 / 扫一扫 / 菜单）'),
+                  value: context.watch<ConfigService>().bottomNavEnabled,
+                  onChanged: (v) =>
+                      context.read<ConfigService>().setBottomNavEnabled(v),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.content_paste_go_outlined),
+                  title: const Text('剪贴板链接检测'),
+                  subtitle: const Text('复制链接后回到浏览器时提示「直接访问」'),
+                  value: context.watch<ConfigService>().clipboardDetectEnabled,
+                  onChanged: (v) =>
+                      context.read<ConfigService>().setClipboardDetectEnabled(v),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),

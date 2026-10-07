@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/font_service.dart';
+
 /// 主题亮度模式
 enum ThemeModeOption { system, light, dark }
 
@@ -22,6 +24,7 @@ class AppearanceSettings extends ChangeNotifier {
   static const String _kBgImage = 'appearance.home_bg_image';
   static const String _kTrueBlack = 'appearance.true_black';
   static const String _kMonet = 'appearance.monet';
+  static const String _kFontFamily = 'appearance.font_family';
 
   final SharedPreferences _prefs;
 
@@ -90,6 +93,14 @@ class AppearanceSettings extends ChangeNotifier {
 
   Future<void> setFontScale(double scale) async {
     await _prefs.setDouble(_kFontScale, scale.clamp(0.8, 1.4));
+    notifyListeners();
+  }
+
+  // —— 全局字体族：'' = 系统默认；'OPPO Sans' = 内置；'ZipCustomFont' = 导入 ——
+  String get fontFamily => _prefs.getString(_kFontFamily) ?? FontService.kBuiltInFamily;
+
+  Future<void> setFontFamily(String family) async {
+    await _prefs.setString(_kFontFamily, family);
     notifyListeners();
   }
 

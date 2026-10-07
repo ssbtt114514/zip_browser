@@ -25,6 +25,7 @@ class ConfigService extends ChangeNotifier {
   static const _kStyleMode = 'ui.style_mode';
   static const _kBookmarksBar = 'ui.bookmarks_bar';
   static const _kBottomNav = 'ui.bottom_nav';
+  static const _kClipboardDetect = 'ui.clipboard_detect';
 
   final SharedPreferences _prefs;
 
@@ -123,4 +124,10 @@ class ConfigService extends ChangeNotifier {
   bool get bottomNavEnabled => _prefs.getBool(_kBottomNav) ?? true;
   Future<void> setBottomNavEnabled(bool value) =>
       _apply(() => _prefs.setBool(_kBottomNav, value));
+
+  /// 剪贴板链接检测：复制链接后回浏览器时横幅提示访问（默认开启）
+  bool get clipboardDetectEnabled =>
+      _prefs.getBool(_kClipboardDetect) ?? true;
+  Future<void> setClipboardDetectEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kClipboardDetect, value));
 }

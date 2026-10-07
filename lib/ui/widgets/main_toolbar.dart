@@ -35,6 +35,11 @@ class MainToolbar extends StatelessWidget {
     final zb = context.zb;
     final tm = context.watch<TabManager>();
     final tab = tm.active;
+    final config = context.watch<ConfigService>();
+    // 底部导航模式（窄屏 + 设置开启）：顶栏只保留搜索框，
+    // 后退/前进/主页/工具箱/扩展/菜单全部收到底部导航栏（BottomNavBar 已有对应按钮）。
+    final width = MediaQuery.sizeOf(context).width;
+    final minimal = width < 720 && config.bottomNavEnabled;
 
     return Container(
       height: ZbTokens.toolbarHeight,
@@ -45,46 +50,50 @@ class MainToolbar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s4),
       child: Row(
         children: [
-          ZbToolButton(
-            icon: Icons.arrow_back,
-            tooltip: '后退（Alt+←）',
-            size: 19,
-            onTap: (tab?.canGoBack.value ?? false)
-                ? () => tab?.kernel.goBack()
-                : null,
-          ),
-          ZbToolButton(
-            icon: Icons.arrow_forward,
-            tooltip: '前进（Alt+→）',
-            size: 19,
-            onTap: (tab?.canGoForward.value ?? false)
-                ? () => tab?.kernel.goForward()
-                : null,
-          ),
-          ZbToolButton(
-            icon: Icons.home_outlined,
-            tooltip: '主页（Alt+Home）',
-            size: 18,
-            onTap: () {
-              final tm2 = context.read<TabManager>();
-              tm2.navigateActive(context.read<ConfigService>().homePage);
-            },
-          ),
-          const SizedBox(width: ZbTokens.s2),
+          if (!minimal) ...[
+            ZbToolButton(
+              icon: Icons.arrow_back,
+              tooltip: '后退（Alt+←）',
+              size: 19,
+              onTap: (tab?.canGoBack.value ?? false)
+                  ? () => tab?.kernel.goBack()
+                  : null,
+            ),
+            ZbToolButton(
+              icon: Icons.arrow_forward,
+              tooltip: '前进（Alt+→）',
+              size: 19,
+              onTap: (tab?.canGoForward.value ?? false)
+                  ? () => tab?.kernel.goForward()
+                  : null,
+            ),
+            ZbToolButton(
+              icon: Icons.home_outlined,
+              tooltip: '主页（Alt+Home）',
+              size: 18,
+              onTap: () {
+                final tm2 = context.read<TabManager>();
+                tm2.navigateActive(context.read<ConfigService>().homePage);
+              },
+            ),
+            const SizedBox(width: ZbTokens.s2),
+          ],
           const AddressBar(),
           const SizedBox(width: ZbTokens.s2),
-          // 工具箱：展开 / 收起二级工具栏
-          Consumer<BrowserUiState>(
-            builder: (_, ui, __) => ZbToolButton(
-              icon: ui.secondaryOpen ? Icons.tune : Icons.tune_outlined,
-              tooltip: '工具箱（阅读模式 / 嗅探 / 滤镜）',
-              size: 19,
-              selected: ui.secondaryOpen,
-              onTap: ui.toggleSecondary,
+          if (!minimal) ...[
+            // 工具箱：展开 / 收起二级工具栏
+            Consumer<BrowserUiState>(
+              builder: (_, ui, __) => ZbToolButton(
+                icon: ui.secondaryOpen ? Icons.tune : Icons.tune_outlined,
+                tooltip: '工具箱（阅读模式 / 嗅探 / 滤镜）',
+                size: 19,
+                selected: ui.secondaryOpen,
+                onTap: ui.toggleSecondary,
+              ),
             ),
-          ),
-          const _ExtensionButtons(),
-          const _MainMenuButton(),
+            const _ExtensionButtons(),
+            const _MainMenuButton(),
+          ],
         ],
       ),
     );

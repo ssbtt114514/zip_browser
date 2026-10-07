@@ -1,8 +1,8 @@
 name: build-android-apk
 
-# 构建 Android 安装包（release APK，universal 单包，内含 arm64-v8a / armeabi-v7a / x86_64）。
-# 注意：仓库 .gitignore 忽略了根目录下的 android/（由 flutter create 生成），
-#       因此 CI 必须先执行 flutter create 生成 android 工程骨架。
+# 构建 Android 安装包（release APK，universal 单包 + 按 ABI 拆分包）。
+# 注意：android/ 工程（含相机 FileProvider 等原生定制）随仓库提交，
+#       CI 直接构建，不再 flutter create。
 #
 # 触发条件：
 #   * main 分支推送 —— 让 APK 路径在合入时就得到验证，而不是等到发版才发现坏了；
@@ -44,13 +44,9 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Android platform files
-        run: flutter create --platforms=android --org com.zipbrowser --project-name zip_browser .
-
-      # flutter create 生成的骨架不含本地手工补丁：部分插件（如 file_picker）子模块
-      # 硬编码了较低 compileSdk，会导致 :file_picker:checkReleaseAarMetadata 失败。
-      # 该脚本把各插件子模块的 compileSdk 统一提升到 36（幂等）。
-      - name: Patch Android Gradle (pin plugin compileSdk)
+      # android/build.gradle.kts 已随仓库提交（compileSdk 36 + 子模块补丁，
+      # 见 tool/patch_android_gradle.py 幂等生成）；以下步骤仅在骨架漂移时兜底。
+      - name: Patch Android Gradle (pin plugin compileSdk, idempotent)
         run: python3 tool/patch_android_gradle.py
 
       # flutter create 会补齐模板自带的 test/widget_test.dart（其中引用模板类 MyApp，

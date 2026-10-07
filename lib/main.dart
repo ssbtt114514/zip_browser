@@ -17,6 +17,7 @@ import 'services/config_service.dart';
 import 'services/desktop_mode_config.dart';
 import 'services/download_runner.dart';
 import 'services/downloads_service.dart';
+import 'services/font_service.dart';
 import 'services/history_service.dart';
 import 'services/host_bridge_api.dart';
 import 'services/paths.dart';
@@ -51,6 +52,9 @@ Future<void> main() async {
 
   // 1. 目录
   await AppPaths.init();
+
+  // 1b. 加载已导入的自定义字体（若有），保证启动即生效
+  await FontService.loadInstalledCustomFont();
 
   // 2. 配置
   final config = await ConfigService.create();

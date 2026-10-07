@@ -13,11 +13,11 @@ pubspec.lock
 .vscode/
 *.iml
 
-# 平台生成物（由 flutter create 生成，仅忽略仓库根目录下的同名目录，
-# 避免误伤 kernels/windows、native_plugins/*/android 这类子目录）
-/android/
+# 平台工程：android/ 包含本地原生定制（相机 FileProvider 等），随仓库提交；
+# windows/、linux/ 仍由 flutter create 生成（无本地定制），继续忽略。
 /windows/
 /linux/
+.gradle/
 /macos/
 /ios/
 /web/
@@ -41,3 +41,6 @@ __pycache__/
 # 系统
 .DS_Store
 Thumbs.db
+
+# Flutter 元数据（本地工具生成，勿提交）
+.metadata

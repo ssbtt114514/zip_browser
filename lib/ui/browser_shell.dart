@@ -43,12 +43,27 @@ class _BrowserShellState extends State<BrowserShell> {
   /// 剪贴板链接检测：复制了链接后回浏览器，横幅提示直接访问
   final ClipboardLinkDetector _clipboard = ClipboardLinkDetector();
   StreamSubscription<String>? _clipboardSub;
+  bool _clipboardEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    _clipboardSub = _clipboard.links.listen(_onClipboardLink);
-    _clipboard.start();
+    // 启动后再按配置启停（首次 build 会同步一次）
+  }
+
+  /// 按设置启停剪贴板检测（设置页关闭后不再轮询/弹提示）
+  void _syncClipboard(bool enabled) {
+    if (enabled == _clipboardEnabled) return;
+    _clipboardEnabled = enabled;
+    if (enabled) {
+      _clipboardSub?.cancel();
+      _clipboardSub = _clipboard.links.listen(_onClipboardLink);
+      _clipboard.start();
+    } else {
+      _clipboardSub?.cancel();
+      _clipboardSub = null;
+      _clipboard.stop();
+    }
   }
 
   /// 剪贴板出现新链接：横幅提示，点击访问
@@ -76,7 +91,6 @@ class _BrowserShellState extends State<BrowserShell> {
     _rootFocus.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
@@ -88,6 +102,11 @@ class _BrowserShellState extends State<BrowserShell> {
     final uiState = context.watch<BrowserUiState>();
     final config = context.watch<ConfigService>();
     final findOpen = uiState.findOpen;
+
+    // 剪贴板检测按设置实时启停
+    _syncClipboard(config.clipboardDetectEnabled);
+    // 底部导航模式：顶栏只留搜索框（书签栏也一并收起）
+    final minimal = compact && config.bottomNavEnabled;
 
     // 快捷键绑定表：随活动标签/配置变化重建
     final bindings = browserShortcutBindings(context);
@@ -105,7 +124,8 @@ class _BrowserShellState extends State<BrowserShell> {
                 children: [
                   if (!compact) const BrowserTabBar(),
                   const MainToolbar(),
-                  if (config.showBookmarksBar) const BookmarksBar(),
+                  if (!minimal && config.showBookmarksBar)
+                    const BookmarksBar(),
                   // 二级工具栏（工具箱），展开/收起带尺寸动画
                   AnimatedSize(
                     duration: ZbTokens.normal,

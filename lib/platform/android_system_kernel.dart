@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart' hide WebResourceError;
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -91,6 +92,8 @@ class AndroidSystemKernel implements BrowserKernel {
         await android.setMediaPlaybackRequiresUserGesture(false);
         // 允许 https 页面加载 http 子资源，避免页面内容缺失/打不开
         await android.setMixedContentMode(MixedContentMode.alwaysAllow);
+        // 文件选择：input[type=file] 时按 capture/accept 拉起相机或相册
+        await android.setOnShowFileSelector(_onShowFileSelector);
       } catch (_) {}
     }
 
@@ -142,6 +145,26 @@ class AndroidSystemKernel implements BrowserKernel {
     final responseScript = await _bridge.handleRaw(message.message);
     if (responseScript != null) {
       await _controller?.runJavaScript(responseScript);
+    }
+  }
+
+  /// WebView 文件选择（input[type=file]）。
+  ///
+  /// capture 开启且 accept 全是图片时走系统相机（MainActivity 原生拉起
+  /// ACTION_IMAGE_CAPTURE + FileProvider）；否则走相册/文件选择器。
+  /// 返回 content URI 列表交回 WebView 的 ValueCallback；失败返回空列表
+  /// （等价于用户取消，网页 input 不提交）。
+  static Future<List<String>> _onShowFileSelector(FileSelectorParams params) async {
+    try {
+      const channel = MethodChannel('zip_browser/file_chooser');
+      final result = await channel.invokeMethod<List<dynamic>>('pick', {
+        'capture': params.isCaptureEnabled,
+        'multiple': params.mode == FileSelectorMode.openMultiple,
+        'accept': params.acceptTypes,
+      });
+      return (result ?? const []).cast<String>();
+    } catch (_) {
+      return const [];
     }
   }
 

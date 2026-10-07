@@ -68,6 +68,7 @@ class ThemeEngine {
       brightness: brightness,
       scaffoldBackgroundColor: scaffoldBg,
       visualDensity: s.visualDensity,
+      fontFamily: s.fontFamily.isEmpty ? null : s.fontFamily,
       textTheme: _textTheme(s, isDark),
       appBarTheme: AppBarTheme(
         centerTitle: cupertino,
@@ -172,9 +173,21 @@ class ThemeEngine {
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
+          // 打开时滑块用「背景色」（融入卡片/页面底），轨道用主题色：
+          // 视觉上"滑块=背景色、轨道=强调色"，开关状态一眼可辨。
+          if (states.contains(WidgetState.selected)) {
+            return isDark ? const Color(0xFF1E2228) : Colors.white;
+          }
+          return null;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return scheme.primary;
           return null;
         }),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? Colors.transparent
+                : null),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
@@ -199,24 +212,26 @@ class ThemeEngine {
     final scale = s.fontScale;
     final color = isDark ? Colors.white : Colors.black87;
     final subColor = isDark ? Colors.white70 : Colors.black54;
+    // 全局字体族（内置 OPPO Sans / 系统默认 / 导入的自定义字体）
+    final family = s.fontFamily.isEmpty ? null : s.fontFamily;
     return TextTheme(
-      displayLarge: TextStyle(fontSize: 57 * scale, color: color),
-      displayMedium: TextStyle(fontSize: 45 * scale, color: color),
-      displaySmall: TextStyle(fontSize: 36 * scale, color: color),
-      headlineLarge: TextStyle(fontSize: 32 * scale, color: color),
-      headlineMedium: TextStyle(fontSize: 28 * scale, color: color),
-      headlineSmall: TextStyle(fontSize: 24 * scale, color: color),
+      displayLarge: TextStyle(fontSize: 57 * scale, color: color, fontFamily: family),
+      displayMedium: TextStyle(fontSize: 45 * scale, color: color, fontFamily: family),
+      displaySmall: TextStyle(fontSize: 36 * scale, color: color, fontFamily: family),
+      headlineLarge: TextStyle(fontSize: 32 * scale, color: color, fontFamily: family),
+      headlineMedium: TextStyle(fontSize: 28 * scale, color: color, fontFamily: family),
+      headlineSmall: TextStyle(fontSize: 24 * scale, color: color, fontFamily: family),
       titleLarge: TextStyle(
-          fontSize: 22 * scale, color: color, fontWeight: FontWeight.w600),
+          fontSize: 22 * scale, color: color, fontWeight: FontWeight.w600, fontFamily: family),
       titleMedium: TextStyle(
-          fontSize: 16 * scale, color: color, fontWeight: FontWeight.w500),
-      titleSmall: TextStyle(fontSize: 14 * scale, color: subColor),
-      bodyLarge: TextStyle(fontSize: 16 * scale, color: color),
-      bodyMedium: TextStyle(fontSize: 14 * scale, color: color),
-      bodySmall: TextStyle(fontSize: 12 * scale, color: subColor),
-      labelLarge: TextStyle(fontSize: 14 * scale, color: color),
-      labelMedium: TextStyle(fontSize: 12 * scale, color: subColor),
-      labelSmall: TextStyle(fontSize: 11 * scale, color: subColor),
+          fontSize: 16 * scale, color: color, fontWeight: FontWeight.w500, fontFamily: family),
+      titleSmall: TextStyle(fontSize: 14 * scale, color: subColor, fontFamily: family),
+      bodyLarge: TextStyle(fontSize: 16 * scale, color: color, fontFamily: family),
+      bodyMedium: TextStyle(fontSize: 14 * scale, color: color, fontFamily: family),
+      bodySmall: TextStyle(fontSize: 12 * scale, color: subColor, fontFamily: family),
+      labelLarge: TextStyle(fontSize: 14 * scale, color: color, fontFamily: family),
+      labelMedium: TextStyle(fontSize: 12 * scale, color: subColor, fontFamily: family),
+      labelSmall: TextStyle(fontSize: 11 * scale, color: subColor, fontFamily: family),
     );
   }
 }

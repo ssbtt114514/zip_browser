@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 路径映射：相机临时图片落在外部专属文件目录（getExternalFilesDir） -->
+<paths>
+    <external-files-path name="external_files" path="." />
+    <files-path name="internal_files" path="." />
+</paths>
