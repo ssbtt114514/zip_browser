@@ -451,7 +451,7 @@ jobs:
           }
           BASE=build_kernel_pkg/zb_lite_kernel/bin
           copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$BASE/windows"
-          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$BASE/linux"
+          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$BASE/linux/x86_64"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$BASE/android/$abi"
           done

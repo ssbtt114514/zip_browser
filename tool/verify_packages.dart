@@ -183,10 +183,21 @@ void _verifyWebview2Kernel(InstalledKernel installed) {
   }
 
   _check(installed.availableOn('windows'), 'windows 可用（type=webview2_fixed）');
-  _check(!installed.availableOn('linux'), 'linux 不可用（固定版本运行时的设计如此）');
 
-  if (installed.manifest.libraries.isNotEmpty) {
-    _info('清单另外声明了 libraries，但 webview2_fixed 走运行时目录，这些声明会被忽略');
+  // chromium 双模式包：windows 走固定版本运行时，linux/android 可携带 FFI 回落库。
+  // 校验语义：webview2_fixed 不得把 windows 声明为 FFI 库（windows 必须走运行时目录），
+  // 但允许 linux/android 的 FFI 回落库存在（chromium 拆分包依赖此规则）。
+  final libs = installed.manifest.libraries;
+  if (libs.isEmpty) {
+    _info('纯 WebView2 固定版本运行时包（未声明 FFI 回落库）');
+  } else {
+    for (final lib in _declaredFromMap(libs)) {
+      _check(lib.platform != 'windows',
+          'webview2_fixed 不得把 windows 声明为 FFI 库（windows 走运行时目录）');
+    }
+    _info('声明了非 windows 的 FFI 回落库：'
+        'linux=${installed.availableOn('linux')} '
+        'android=${installed.availableOn('android')}');
   }
 }
 
