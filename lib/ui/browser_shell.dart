@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../core/sniff/sniff_model.dart';
 import '../core/tab/tab_manager.dart';
+import '../services/clipboard_link_detector.dart';
 import '../services/config_service.dart';
 import '../services/ui_state.dart';
 import 'context_menu_sheet.dart';
@@ -14,6 +15,7 @@ import 'pages/sniff_panel.dart';
 import 'shortcuts/browser_focus.dart';
 import 'shortcuts/browser_shortcuts.dart';
 import 'widgets/bookmarks_bar.dart';
+import 'widgets/bottom_nav_bar.dart';
 import 'widgets/browser_tab_bar.dart';
 import 'widgets/main_toolbar.dart';
 import 'widgets/omnibox_suggestions.dart';
@@ -38,8 +40,39 @@ class _BrowserShellState extends State<BrowserShell> {
   final FocusNode _rootFocus =
       FocusNode(debugLabel: 'browser_root', skipTraversal: true);
 
+  /// 剪贴板链接检测：复制了链接后回浏览器，横幅提示直接访问
+  final ClipboardLinkDetector _clipboard = ClipboardLinkDetector();
+  StreamSubscription<String>? _clipboardSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _clipboardSub = _clipboard.links.listen(_onClipboardLink);
+    _clipboard.start();
+  }
+
+  /// 剪贴板出现新链接：横幅提示，点击访问
+  void _onClipboardLink(String url) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('检测到剪贴板链接：$url',
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: '访问',
+          onPressed: () =>
+              context.read<TabManager>().navigateActive(url),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _clipboardSub?.cancel();
+    _clipboard.dispose();
     _rootFocus.dispose();
     super.dispose();
   }
@@ -120,6 +153,8 @@ class _BrowserShellState extends State<BrowserShell> {
                   const _UserscriptBinder(child: SizedBox.shrink()),
                   // 扩展通知绑定
                   const _ExtensionNotificationBinder(child: SizedBox.shrink()),
+                  // Firefox 风格底部导航栏（窄屏 + 设置开启时显示）
+                  if (compact && config.bottomNavEnabled) const BottomNavBar(),
                 ],
               ),
             ),

@@ -24,6 +24,7 @@ class ConfigService extends ChangeNotifier {
   static const _kAutoSniff = 'sniff.auto';
   static const _kStyleMode = 'ui.style_mode';
   static const _kBookmarksBar = 'ui.bookmarks_bar';
+  static const _kBottomNav = 'ui.bottom_nav';
 
   final SharedPreferences _prefs;
 
@@ -117,4 +118,9 @@ class ConfigService extends ChangeNotifier {
   bool get showBookmarksBar => _prefs.getBool(_kBookmarksBar) ?? false;
   Future<void> setShowBookmarksBar(bool value) =>
       _apply(() => _prefs.setBool(_kBookmarksBar, value));
+
+  /// Firefox 风格底部导航栏（窄屏显示，默认开启）
+  bool get bottomNavEnabled => _prefs.getBool(_kBottomNav) ?? true;
+  Future<void> setBottomNavEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kBottomNav, value));
 }

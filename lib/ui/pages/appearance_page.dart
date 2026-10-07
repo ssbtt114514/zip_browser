@@ -229,6 +229,20 @@ class AppearancePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          // —— 浏览器界面（Firefox 风格）——
+          const _SectionTitle('浏览器界面'),
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.space_dashboard_outlined),
+              title: const Text('底部导航栏'),
+              subtitle: const Text('窄屏时显示 Firefox 风格悬浮底部导航（后退 / 前进 / 主页 / 扫一扫 / 菜单）'),
+              value: context.watch<ConfigService>().bottomNavEnabled,
+              onChanged: (v) =>
+                  context.read<ConfigService>().setBottomNavEnabled(v),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // —— 深色模式选项 ——
           if (isDark || s.themeMode == ThemeModeOption.dark) ...[
             const _SectionTitle('深色模式'),

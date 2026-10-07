@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/constants.dart';
 import '../../core/plugin/plugin_manager.dart';
 import '../../core/tab/tab_manager.dart';
 import '../../core/tab/tab_model.dart';
+import '../../core/tab/url_utils.dart';
 import '../../services/config_service.dart';
 import '../../services/share_helper.dart';
 import '../../services/session_service.dart';
@@ -88,7 +91,8 @@ class MainToolbar extends StatelessWidget {
   }
 }
 
-/// 主菜单（⋮）
+/// 主菜单（⋮）。菜单项与处理逻辑抽为顶层共享函数（[mainMenuEntries] /
+/// [handleMainMenuAction]），供底部导航栏（Firefox 风格）复用。
 class _MainMenuButton extends StatelessWidget {
   const _MainMenuButton();
 
@@ -102,311 +106,397 @@ class _MainMenuButton extends StatelessWidget {
       tooltip: '菜单',
       splashRadius: 16,
       icon: const Icon(Icons.more_vert, size: 20),
-      onSelected: (value) => _onMenu(context, value),
-      itemBuilder: (_) => [
-        _row('new_tab', Icons.add, '新建标签页', hint: 'Ctrl+T'),
-        _row('new_private', Icons.visibility_off_outlined, '新建隐私标签',
-            hint: 'Ctrl+Shift+N'),
-        PopupMenuItem<String>(
-          value: 'reopen',
-          enabled: tm.canReopenClosedTab,
-          height: 38,
-          child: _MenuRow(
-            Icons.restore_page_outlined,
-            tm.canReopenClosedTab ? '恢复关闭的标签页' : '恢复关闭的标签页（无）',
-            hint: 'Ctrl+Shift+T',
-          ),
-        ),
-        _row('restore_session', Icons.history_toggle_off, '恢复上次会话'),
-        const PopupMenuDivider(height: 1),
-        _row('reload', Icons.refresh, '刷新', hint: 'F5'),
-        _row('hard_reload', Icons.cached, '强制刷新（忽略缓存）', hint: 'Ctrl+Shift+R'),
-        const PopupMenuDivider(height: 1),
-        _row('bookmarks', Icons.bookmark_outline, '书签', hint: 'Ctrl+Shift+O'),
-        _row('history', Icons.history, '历史记录', hint: 'Ctrl+H'),
-        _row('downloads', Icons.download_outlined, '下载内容', hint: 'Ctrl+J'),
-        _row('find', Icons.search, '页面中查找', hint: 'Ctrl+F'),
-        const PopupMenuDivider(height: 1),
-        // 缩放
-        PopupMenuItem<String>(
-          enabled: false,
-          height: 34,
-          child: _MenuRow(
-            Icons.zoom_out_map,
-            '缩放 ${ZoomService.label(tm.active == null ? 1.0 : tm.zoomFor(tm.active!))}',
-          ),
-        ),
-        _row('zoom_in', Icons.add, '放大', hint: 'Ctrl++', indent: true),
-        _row('zoom_out', Icons.remove, '缩小', hint: 'Ctrl+-', indent: true),
-        _row('zoom_reset', Icons.restart_alt, '重置缩放', hint: 'Ctrl+0',
-            indent: true),
-        const PopupMenuDivider(height: 1),
-        CheckedPopupMenuItem<String>(
-          value: 'desktop',
-          checked: tab?.desktopMode.value ?? false,
-          height: 38,
-          child: const _MenuRow(Icons.desktop_windows, '桌面版网站'),
-        ),
-        CheckedPopupMenuItem<String>(
-          value: 'bookmarks_bar',
-          checked: config.showBookmarksBar,
-          height: 38,
-          child: const _MenuRow(Icons.bookmarks_outlined, '显示书签栏',
-              hint: 'Ctrl+Shift+B'),
-        ),
-        CheckedPopupMenuItem<String>(
-          value: 'sniff_auto',
-          checked: config.autoSniff,
-          height: 38,
-          child: const _MenuRow(Icons.satellite_alt_outlined, '自动嗅探媒体资源'),
-        ),
-        CheckedPopupMenuItem<String>(
-          value: 'js',
-          checked: config.jsEnabled,
-          height: 38,
-          child: const _MenuRow(Icons.javascript_outlined, '启用 JavaScript'),
-        ),
-        const PopupMenuDivider(height: 1),
-        _row('scan', Icons.qr_code_scanner, '扫一扫'),
-        _row('share', Icons.share, '分享'),
-        _row('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
-        const PopupMenuDivider(height: 1),
-        _row('clear', Icons.cleaning_services_outlined, '清除浏览数据'),
-        _row('kernels', Icons.memory_outlined, '内核管理'),
-        _row('plugins', Icons.extension, '插件管理'),
-        _row('userscripts', Icons.code, '用户脚本'),
-        _row('settings', Icons.settings, '设置'),
-        _row('about', Icons.info_outline, '关于 Zip Browser'),
-      ],
+      onSelected: (value) => handleMainMenuAction(context, value),
+      itemBuilder: (_) => _popupItems(context, tm, config, tab),
     );
   }
+}
 
-  PopupMenuItem<String> _row(
-    String value,
-    IconData icon,
-    String label, {
-    String? hint,
-    bool indent = false,
-  }) {
-    return PopupMenuItem<String>(
-      value: value,
-      height: 38,
-      child: Padding(
-        padding: EdgeInsets.only(left: indent ? ZbTokens.s6 : 0),
-        child: _MenuRow(icon, label, hint: hint),
-      ),
-    );
-  }
+/// 主菜单条目模型（PopupMenu 与底部弹层共用）
+class MainMenuEntry {
+  final String value;
+  final IconData icon;
+  final String label;
+  final String? hint;
+  final bool dividerBefore;
+  const MainMenuEntry(this.value, this.icon, this.label,
+      {this.hint, this.dividerBefore = false});
+}
 
-  Future<void> _onMenu(BuildContext context, String value) async {
-    final tm = context.read<TabManager>();
-    final config = context.read<ConfigService>();
-    final uiState = context.read<BrowserUiState>();
-    final TabModel? tab = tm.active;
+/// 组装主菜单条目列表。
+List<MainMenuEntry> mainMenuEntries(
+  BuildContext context, {
+  required TabManager tm,
+  required ConfigService config,
+  required TabModel? tab,
+}) {
+  return [
+    const MainMenuEntry('new_tab', Icons.add, '新建标签页', hint: 'Ctrl+T'),
+    const MainMenuEntry('new_private', Icons.visibility_off_outlined,
+        '新建隐私标签', hint: 'Ctrl+Shift+N'),
+    MainMenuEntry(
+      'reopen',
+      Icons.restore_page_outlined,
+      tm.canReopenClosedTab ? '恢复关闭的标签页' : '恢复关闭的标签页（无）',
+      hint: 'Ctrl+Shift+T',
+    ),
+    const MainMenuEntry('restore_session', Icons.history_toggle_off, '恢复上次会话'),
+    const MainMenuEntry('reload', Icons.refresh, '刷新',
+        hint: 'F5', dividerBefore: true),
+    const MainMenuEntry('hard_reload', Icons.cached, '强制刷新（忽略缓存）',
+        hint: 'Ctrl+Shift+R'),
+    const MainMenuEntry('bookmarks', Icons.bookmark_outline, '书签',
+        hint: 'Ctrl+Shift+O', dividerBefore: true),
+    const MainMenuEntry('history', Icons.history, '历史记录', hint: 'Ctrl+H'),
+    const MainMenuEntry('downloads', Icons.download_outlined, '下载内容', hint: 'Ctrl+J'),
+    const MainMenuEntry('find', Icons.search, '页面中查找', hint: 'Ctrl+F'),
+    MainMenuEntry(
+      'zoom_show',
+      Icons.zoom_out_map,
+      '缩放 ${ZoomService.label(tm.active == null ? 1.0 : tm.zoomFor(tm.active!))}',
+      dividerBefore: true,
+    ),
+    const MainMenuEntry('zoom_in', Icons.add, '放大', hint: 'Ctrl++'),
+    const MainMenuEntry('zoom_out', Icons.remove, '缩小', hint: 'Ctrl+-'),
+    const MainMenuEntry('zoom_reset', Icons.restart_alt, '重置缩放', hint: 'Ctrl+0'),
+    const MainMenuEntry('desktop', Icons.desktop_windows, '桌面版网站',
+        dividerBefore: true),
+    const MainMenuEntry('bookmarks_bar', Icons.bookmarks_outlined, '显示书签栏',
+        hint: 'Ctrl+Shift+B'),
+    const MainMenuEntry('sniff_auto', Icons.satellite_alt_outlined, '自动嗅探媒体资源'),
+    const MainMenuEntry('js', Icons.javascript_outlined, '启用 JavaScript'),
+    const MainMenuEntry('scan', Icons.qr_code_scanner, '扫一扫', dividerBefore: true),
+    const MainMenuEntry('share', Icons.share, '分享'),
+    const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
+    const MainMenuEntry('clear', Icons.cleaning_services_outlined, '清除浏览数据',
+        dividerBefore: true),
+    const MainMenuEntry('kernels', Icons.memory_outlined, '内核管理'),
+    const MainMenuEntry('plugins', Icons.extension, '插件管理'),
+    const MainMenuEntry('userscripts', Icons.code, '用户脚本'),
+    const MainMenuEntry('settings', Icons.settings, '设置'),
+    const MainMenuEntry('about', Icons.info_outline, '关于 Zip Browser'),
+  ];
+}
 
-    switch (value) {
-      case 'new_tab':
-        await tm.createTab();
-      case 'new_private':
-        await tm.createTab(private: true);
-      case 'reopen':
-        await tm.reopenClosedTab();
-      case 'restore_session':
-        await tm.restoreLastSession();
-      case 'reload':
-        await tab?.kernel.reload();
-      case 'hard_reload':
-        await tab?.kernel.clearCache();
-        await tab?.kernel.reload();
-      case 'bookmarks':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => BookmarksPage(onOpen: (u) => tm.navigateActive(u)),
-          ),
-        );
-      case 'history':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => HistoryPage(onOpen: (u) => tm.navigateActive(u)),
-          ),
-        );
-      case 'downloads':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const DownloadsPage()),
-        );
-      case 'find':
-        uiState.openFind();
-      case 'zoom_in':
-        await tm.zoomIn();
-      case 'zoom_out':
-        await tm.zoomOut();
-      case 'zoom_reset':
-        await tm.resetZoom();
-      case 'desktop':
-        if (tab != null) await tm.toggleDesktopMode(tab);
-      case 'bookmarks_bar':
-        await config.setShowBookmarksBar(!config.showBookmarksBar);
-      case 'sniff_auto':
-        await config.setAutoSniff(!config.autoSniff);
-      case 'js':
-        await config.setJsEnabled(!config.jsEnabled);
-        if (tab != null) await tab.kernel.reload();
-      case 'scan':
-        if (!context.mounted) return;
-        final raw = await Navigator.of(context).push<String>(
-          MaterialPageRoute(builder: (_) => const QrScanPage()),
-        );
-        if (raw != null && raw.isNotEmpty) {
-          await tm.navigateActive(raw);
-        }
-      case 'share':
-        if (tab != null) {
-          final u = tab.url.value;
-          await ShareHelper.share(
-              u.startsWith('data:') ? tab.title.value : u);
-        }
-      case 'fullscreen':
-        final isFull = uiState.fullscreen;
-        await uiState.setFullscreen(!isFull);
-      case 'clear':
-        if (!context.mounted) return;
-        await _confirmClear(context, tm);
-      case 'kernels':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const KernelsPage()),
-        );
-      case 'plugins':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const PluginsPage()),
-        );
-      case 'userscripts':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const UserscriptsPage()),
-        );
-      case 'settings':
-        if (!context.mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SettingsPage()),
-        );
-      case 'about':
-        if (!context.mounted) return;
-        await _showAbout(context, tm);
+/// 把 [mainMenuEntries] 转成 PopupMenu 项（桌面/宽屏下拉菜单用）。
+List<PopupMenuEntry<String>> _popupItems(
+  BuildContext context,
+  TabManager tm,
+  ConfigService config,
+  TabModel? tab,
+) {
+  final entries = mainMenuEntries(context, tm: tm, config: config, tab: tab);
+  final items = <PopupMenuEntry<String>>[];
+  for (final e in entries) {
+    if (e.dividerBefore) items.add(const PopupMenuDivider(height: 1));
+    if (e.value == 'reopen') {
+      items.add(PopupMenuItem<String>(
+        value: e.value,
+        enabled: tm.canReopenClosedTab,
+        height: 38,
+        child: _MenuRow(e.icon, e.label, hint: e.hint),
+      ));
+      continue;
     }
+    if (e.value == 'desktop' ||
+        e.value == 'bookmarks_bar' ||
+        e.value == 'sniff_auto' ||
+        e.value == 'js') {
+      final checked = switch (e.value) {
+        'desktop' => tab?.desktopMode.value ?? false,
+        'bookmarks_bar' => config.showBookmarksBar,
+        'sniff_auto' => config.autoSniff,
+        'js' => config.jsEnabled,
+        _ => false,
+      };
+      items.add(CheckedPopupMenuItem<String>(
+        value: e.value,
+        checked: checked,
+        height: 38,
+        child: _MenuRow(e.icon, e.label, hint: e.hint),
+      ));
+      continue;
+    }
+    if (e.value == 'zoom_show') {
+      items.add(PopupMenuItem<String>(
+        enabled: false,
+        height: 34,
+        child: _MenuRow(e.icon, e.label, hint: e.hint),
+      ));
+      continue;
+    }
+    items.add(PopupMenuItem<String>(
+      value: e.value,
+      height: 38,
+      child: _MenuRow(e.icon, e.label, hint: e.hint),
+    ));
+  }
+  return items;
+}
+
+/// 处理主菜单动作（主菜单与底部导航共用）。
+Future<void> handleMainMenuAction(BuildContext context, String value) async {
+  final tm = context.read<TabManager>();
+  final config = context.read<ConfigService>();
+  final uiState = context.read<BrowserUiState>();
+  final TabModel? tab = tm.active;
+
+  switch (value) {
+    case 'new_tab':
+      await tm.createTab();
+    case 'new_private':
+      await tm.createTab(private: true);
+    case 'reopen':
+      await tm.reopenClosedTab();
+    case 'restore_session':
+      await tm.restoreLastSession();
+    case 'reload':
+      await tab?.kernel.reload();
+    case 'hard_reload':
+      await tab?.kernel.clearCache();
+      await tab?.kernel.reload();
+    case 'bookmarks':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BookmarksPage(onOpen: (u) => tm.navigateActive(u)),
+        ),
+      );
+    case 'history':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => HistoryPage(onOpen: (u) => tm.navigateActive(u)),
+        ),
+      );
+    case 'downloads':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const DownloadsPage()),
+      );
+    case 'find':
+      uiState.openFind();
+    case 'zoom_in':
+      await tm.zoomIn();
+    case 'zoom_out':
+      await tm.zoomOut();
+    case 'zoom_reset':
+      await tm.resetZoom();
+    case 'desktop':
+      if (tab != null) await tm.toggleDesktopMode(tab);
+    case 'bookmarks_bar':
+      await config.setShowBookmarksBar(!config.showBookmarksBar);
+    case 'sniff_auto':
+      await config.setAutoSniff(!config.autoSniff);
+    case 'js':
+      await config.setJsEnabled(!config.jsEnabled);
+      if (tab != null) await tab.kernel.reload();
+    case 'scan':
+      await openQrScan(context);
+    case 'share':
+      if (tab != null) {
+        final u = tab.url.value;
+        await ShareHelper.share(u.startsWith('data:') ? tab.title.value : u);
+      }
+    case 'fullscreen':
+      final isFull = uiState.fullscreen;
+      await uiState.setFullscreen(!isFull);
+    case 'clear':
+      if (!context.mounted) return;
+      await _confirmClear(context, tm);
+    case 'kernels':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const KernelsPage()),
+      );
+    case 'plugins':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PluginsPage()),
+      );
+    case 'userscripts':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const UserscriptsPage()),
+      );
+    case 'settings':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SettingsPage()),
+      );
+    case 'about':
+      if (!context.mounted) return;
+      await showAboutDialog(context, tm);
+  }
+}
+
+/// 打开二维码扫描页并处理结果。
+Future<void> openQrScan(BuildContext context) async {
+  final raw = await Navigator.of(context).push<String>(
+    MaterialPageRoute(builder: (_) => const QrScanPage()),
+  );
+  if (raw == null || raw.isEmpty || !context.mounted) return;
+  await handleScanResult(context, raw);
+}
+
+/// 扫描结果智能处理：是地址直接访问；纯文本弹窗选择「复制 / 搜索 / 取消」。
+Future<void> handleScanResult(BuildContext context, String raw) async {
+  final tm = context.read<TabManager>();
+  final url = UrlInput.tryResolveUrl(raw);
+  if (url != null) {
+    await tm.navigateActive(url);
+    return;
   }
 
-  /// 关于对话框
-  Future<void> _showAbout(BuildContext context, TabManager tm) async {
-    final session = context.read<SessionService>();
-    await showDialog<void>(
-      context: context,
-      builder: (dctx) {
-        final zb = dctx.zb;
-        return AlertDialog(
-          icon: const Icon(Icons.travel_explore),
-          title: const Text('Zip Browser'),
+  final trimmed = raw.trim();
+  final action = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.qr_code_2),
+      title: const Text('扫描结果不是链接'),
+      content: Text(
+        trimmed,
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 13.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, 'copy'),
+          child: const Text('复制文本'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, 'search'),
+          child: const Text('搜索'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, null),
+          child: const Text('取消'),
+        ),
+      ],
+    ),
+  );
+  if (action == null || !context.mounted) return;
+  switch (action) {
+    case 'copy':
+      await Clipboard.setData(ClipboardData(text: trimmed));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('已复制到剪贴板'), duration: Duration(seconds: 1)),
+        );
+      }
+    case 'search':
+      await tm.navigateActive(trimmed); // 走地址栏解析：域名补全 / 搜索词
+  }
+}
+
+/// 关于对话框（版本号取自 [BrowserConstants.appVersion]，不再写死）
+Future<void> showAboutDialog(BuildContext context, TabManager tm) async {
+  final session = context.read<SessionService>();
+  await showDialog<void>(
+    context: context,
+    builder: (dctx) {
+      final zb = dctx.zb;
+      return AlertDialog(
+        icon: const Icon(Icons.travel_explore),
+        title: const Text('Zip Browser'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('版本 ${BrowserConstants.appVersion}',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: ZbTokens.s4),
+            Text(
+              '可通过 zip 插件扩展功能与内核\n'
+              'Android: System WebView · Windows: WebView2\n'
+              '当前平台：${Platform.operatingSystem}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12, height: 1.6, color: zb.textMuted),
+            ),
+            const SizedBox(height: ZbTokens.s5),
+            Text(
+              session.hasSnapshot
+                  ? '已保存 ${session.readSnapshot().length} 个标签的会话快照'
+                  : '暂无会话快照',
+              style: TextStyle(fontSize: 11.5, color: zb.textFaint),
+            ),
+            const SizedBox(height: ZbTokens.s5),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.person_outline, size: 18),
+              label: const Text('作者：ssbtt114514（访问主页）'),
+              onPressed: () {
+                Navigator.of(dctx).pop();
+                tm.createTab(url: 'https://ssbtt114514.github.io');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// 清除浏览数据确认框
+Future<void> _confirmClear(BuildContext context, TabManager tm) async {
+  bool cookies = true, cache = true, historyFlag = true;
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      Widget row(bool value, String label, ValueChanged<bool?> onChanged) {
+        return CheckboxListTile(
+          dense: true,
+          value: value,
+          onChanged: onChanged,
+          title: Text(label, style: const TextStyle(fontSize: 13.5)),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+        );
+      }
+
+      return StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('清除浏览数据'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('版本 0.6.0',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: ZbTokens.s4),
-              Text(
-                '可通过 zip 插件扩展功能与内核\n'
-                'Android: System WebView · Windows: WebView2\n'
-                '当前平台：${Platform.operatingSystem}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 12, height: 1.6, color: zb.textMuted),
-              ),
-              const SizedBox(height: ZbTokens.s5),
-              Text(
-                session.hasSnapshot
-                    ? '已保存 ${session.readSnapshot().length} 个标签的会话快照'
-                    : '暂无会话快照',
-                style: TextStyle(fontSize: 11.5, color: zb.textFaint),
-              ),
-              const SizedBox(height: ZbTokens.s5),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.person_outline, size: 18),
-                label: const Text('作者：ssbtt114514（访问主页）'),
-                onPressed: () {
-                  Navigator.of(dctx).pop();
-                  tm.createTab(url: 'https://ssbtt114514.github.io');
-                },
-              ),
+              row(cookies, 'Cookie 与登录状态',
+                  (v) => setState(() => cookies = v ?? true)),
+              row(cache, '缓存的图片与文件',
+                  (v) => setState(() => cache = v ?? true)),
+              row(historyFlag, '历史记录',
+                  (v) => setState(() => historyFlag = v ?? true)),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dctx).pop(),
-              child: const Text('关闭'),
-            ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('清除')),
           ],
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
 
-  /// 清除浏览数据确认框
-  Future<void> _confirmClear(BuildContext context, TabManager tm) async {
-    bool cookies = true, cache = true, historyFlag = true;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        Widget row(bool value, String label, ValueChanged<bool?> onChanged) {
-          return CheckboxListTile(
-            dense: true,
-            value: value,
-            onChanged: onChanged,
-            title: Text(label, style: const TextStyle(fontSize: 13.5)),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
-          );
-        }
-
-        return StatefulBuilder(
-          builder: (ctx, setState) => AlertDialog(
-            title: const Text('清除浏览数据'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                row(cookies, 'Cookie 与登录状态',
-                    (v) => setState(() => cookies = v ?? true)),
-                row(cache, '缓存的图片与文件',
-                    (v) => setState(() => cache = v ?? true)),
-                row(historyFlag, '历史记录',
-                    (v) => setState(() => historyFlag = v ?? true)),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('取消')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('清除')),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (ok == true) {
-      await tm.clearBrowsingData(
-          cookies: cookies, cache: cache, historyFlag: historyFlag);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('浏览数据已清除'), duration: Duration(seconds: 1)),
-        );
-      }
+  if (ok == true) {
+    await tm.clearBrowsingData(
+        cookies: cookies, cache: cache, historyFlag: historyFlag);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('浏览数据已清除'), duration: Duration(seconds: 1)),
+      );
     }
   }
 }
