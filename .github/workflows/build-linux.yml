@@ -64,12 +64,14 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Setup Flutter (latest stable)
+      # aarch64：subosito/flutter-action 无法在 arm64 解析任何版本，官方
+      # releases_linux.json 也只发布 x64 SDK；arm64 Linux 上官方推荐用 snap 安装。
+      - name: Setup Flutter via snap (aarch64)
         if: matrix.flutter_version == ''
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+        run: |
+          sudo snap install flutter --classic
+          echo "/snap/bin" >> "$GITHUB_PATH"
+          flutter --version
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
@@ -144,10 +146,7 @@ jobs:
             aarch64) FLUTTER_ARCH=arm64 ;;
           esac
           bundle=build/linux/$FLUTTER_ARCH/release/bundle
-          VERSION=$(python3 -c \
-            "from pathlib import Path
-             line=[l for l in Path('pubspec.yaml').read_text().splitlines() if l.startswith('version:')][0]
-             print(line.split(':')[1].strip().split('+')[0])")
+          VERSION=$(python3 -c "from pathlib import Path; l=[x for x in Path('pubspec.yaml').read_text().splitlines() if x.startswith('version:')][0]; print(l.split(':')[1].strip().split('+')[0])")
           echo "打包版本：$VERSION · 架构：${{ matrix.arch }}"
           python3 tool/pack_deb.py "$bundle" \
             "dist/zip-browser-linux-${{ matrix.arch }}.deb" \
