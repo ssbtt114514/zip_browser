@@ -64,8 +64,13 @@ Future<void> main() async {
   final appearance = await AppearanceSettings.create();
 
   // 2b-2. 莫奈动态色板（Android 12+，其他平台返回 null）
-  final MonetPalette? monetPalette =
-      await DynamicColorPlugin.getCorePalette();
+  // 失败时静默降级（取不到色板不影响启动）
+  MonetPalette? monetPalette;
+  try {
+    monetPalette = await DynamicColorPlugin.getCorePalette();
+  } catch (e) {
+    debugPrint('莫奈取色不可用：$e');
+  }
   // 2c. 搜索引擎
   final searchEngines = SearchEnginesService(config);
 
@@ -153,15 +158,6 @@ Future<void> main() async {
   final lifecycle = _SessionLifecycleObserver(tabManager, sessionService);
   WidgetsBinding.instance.addObserver(lifecycle);
 
-  // 7. 首个标签页：按启动设置决定打开主页还是恢复上次会话
-  final snapshot = sessionService.readSnapshot();
-  if (sessionService.startupMode == SessionStartupMode.restore &&
-      snapshot.isNotEmpty) {
-    await tabManager.restoreLastSession();
-  } else {
-    await tabManager.createTab();
-  }
-
   runApp(ZipBrowserApp(
     config: config,
     pluginManager: pluginManager,
@@ -182,4 +178,25 @@ Future<void> main() async {
     sessionService: sessionService,
     urlSuggest: urlSuggest,
   ));
+
+  // 7. 首个标签页：首帧渲染完成后再创建（先出界面，再加载标签，杜绝启动黑屏/卡死观感）。
+  // 任何初始化失败都不得阻塞：兜底开一个新标签，绝不让应用停在空白。
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      final snapshot = sessionService.readSnapshot();
+      if (sessionService.startupMode == SessionStartupMode.restore &&
+          snapshot.isNotEmpty) {
+        await tabManager.restoreLastSession();
+      } else {
+        await tabManager.createTab();
+      }
+    } catch (e, st) {
+      debugPrint('初始标签创建失败：$e\n$st');
+      try {
+        await tabManager.createTab();
+      } catch (_) {
+        debugPrint('兜底创建标签也失败，进入 UI（用户可手动新建）');
+      }
+    }
+  });
 }

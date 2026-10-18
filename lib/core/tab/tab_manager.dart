@@ -366,9 +366,37 @@ class TabManager extends ChangeNotifier {
       await _initialize(tab, url ?? config.homePage);
     } catch (e, st) {
       debugPrint('内核初始化失败：$e\n$st');
+      // 防白屏：内核初始化失败时加载内置错误页（提示切换内核），而不是静默空白
+      try {
+        await tab.kernel.loadUrl(_kernelErrorPage(e.toString()));
+      } catch (_) {}
     }
     _scheduleSessionSave();
     return tab;
+  }
+
+  /// 内核初始化失败时的内置错误页（data URI，暗色兼容）
+  static String _kernelErrorPage(String detail) {
+    final html =
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="color-scheme" content="dark light">'
+        '<style>body{font-family:system-ui,sans-serif;display:flex;'
+        'align-items:center;justify-content:center;min-height:80vh;margin:0;'
+        'background:#f4f7fa;color:#16212e;text-align:center}'
+        '.c{max-width:520px;padding:24px}'
+        '.e{font-size:40px;margin-bottom:12px}'
+        'h1{font-size:19px;margin:8px 0}'
+        'p{font-size:13.5px;line-height:1.7;color:#4c5d6e;'
+        'word-break:break-all}'
+        'kbd{background:#e8edf3;border-radius:6px;padding:2px 7px;'
+        'font-size:12px}</style></head><body><div class="c">'
+        '<div class="e">⚠️</div>'
+        '<h1>页面加载失败</h1>'
+        '<p>当前浏览器内核初始化失败，可能是内核包与设备不匹配或内核损坏。</p>'
+        '<p>请到 <kbd>菜单 → 内核管理</kbd> 切换回「系统内核」后再试。</p>'
+        '<p style="font-size:11.5px;color:#8496a6">${Uri.encodeComponent(detail)}</p>'
+        '</div></body></html>';
+    return 'data:text/html;charset=utf-8,${Uri.encodeComponent(html)}';
   }
 
   Future<void> _initialize(TabModel tab, String address) async {
@@ -718,19 +746,53 @@ class TabManager extends ChangeNotifier {
       await closeTab(t.id);
     }
 
+    // 上限保护：一次恢复过多标签会在移动端串行创建大量 WebView，造成启动卡死
+    const maxRestore = 16;
+    final targets = snapshot.take(maxRestore).toList();
+
+    // 分批并行创建（每批 4 个）：既避免串行卡死，也避免瞬时创建过多 WebView 导致 OOM
     var first = true;
-    for (final s in snapshot) {
-      final url = s.url.startsWith('about:') ? null : s.url;
-      final tab = await createTab(
-        url: url,
-        pinned: s.pinned,
-        activate: first,
-      );
-      first = false;
-      if (!s.pinned && s.groupId != null &&
-          _groups.any((g) => g.id == s.groupId)) {
-        tab.groupId.value = s.groupId;
+    for (var start = 0; start < targets.length; start += 4) {
+      final end = math.min(start + 4, targets.length);
+      final batch = targets.sublist(start, end);
+      final created = await Future.wait(batch.map((s) async {
+        try {
+          final url = s.url.startsWith('about:') ? null : s.url;
+          // 单标签 20 秒超时：内核加载死锁/极慢时跳过，绝不让启动永久挂起
+          final tab = await createTab(
+            url: url,
+            pinned: s.pinned,
+            activate: false,
+          ).timeout(const Duration(seconds: 20));
+          if (!s.pinned &&
+              s.groupId != null &&
+              _groups.any((g) => g.id == s.groupId)) {
+            tab.groupId.value = s.groupId;
+          }
+          return tab;
+        } catch (e, st) {
+          debugPrint('恢复标签失败：$e\n$st');
+          return null;
+        }
+      }));
+      if (first) {
+        TabModel? firstTab;
+        for (final t in created) {
+          if (t != null) {
+            firstTab = t;
+            break;
+          }
+        }
+        if (firstTab != null) {
+          _activeIndex = _tabs.indexOf(firstTab);
+          first = false;
+        }
       }
+    }
+
+    // 兜底：一个都没恢复出来时开一个新标签
+    if (_tabs.isEmpty) {
+      await createTab();
     }
     notifyListeners();
   }
