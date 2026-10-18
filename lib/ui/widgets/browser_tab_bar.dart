@@ -20,9 +20,10 @@ const List<Color> kTabGroupColors = [
 
 /// 标签栏。
 ///
-/// 视觉：跟随主题的外壳底色 + 活动标签"浮起"卡片 + 悬停反馈；
-/// 交互：拖拽排序（跨固定区自动固定/取消固定）、固定标签、标签组、
-/// 标签搜索、右键/长按菜单（复制、关闭其他、关闭右侧等）。
+/// 视觉（Chrome 风格）：标签条使用窗口底色，活动标签与下方工具栏同色
+/// "切入"融合（顶部圆角、底部直角、无边框无浮起阴影），非活动标签透明
+/// 悬停才显色；交互：拖拽排序（跨固定区自动固定/取消固定）、固定标签、
+/// 标签组、标签搜索、右键/长按菜单（复制、关闭其他、关闭右侧等）。
 class BrowserTabBar extends StatelessWidget {
   final bool compact;
   const BrowserTabBar({super.key, this.compact = false});
@@ -37,7 +38,7 @@ class BrowserTabBar extends StatelessWidget {
     return Container(
       height: compact ? ZbTokens.compactTabStripHeight : ZbTokens.tabStripHeight,
       decoration: BoxDecoration(
-        color: zb.chrome,
+        color: compact ? zb.chromeElevated : zb.chromeStrip,
         border: Border(bottom: BorderSide(color: zb.hairline, width: 1)),
       ),
       child: Row(
@@ -48,9 +49,11 @@ class BrowserTabBar extends StatelessWidget {
                 : ReorderableListView.builder(
                     scrollDirection: Axis.horizontal,
                     buildDefaultDragHandles: false,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? ZbTokens.s2 : ZbTokens.s3,
-                      vertical: ZbTokens.s1,
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? ZbTokens.s2 : ZbTokens.s3,
+                      compact ? ZbTokens.s1 : 4,
+                      ZbTokens.s2,
+                      0, // 底部留 0：活动标签直通工具栏（Chrome 融合）
                     ),
                     itemCount: tabs.length,
                     // 保留 onReorder 以兼容 Flutter < 3.41（onReorderItem 为 3.41 新增）
@@ -355,6 +358,7 @@ class _TabChipState extends State<_TabChip> {
     final scheme = Theme.of(context).colorScheme;
     final tab = widget.tab;
     final pinned = tab.isPinned.value;
+    final compact = widget.compact;
 
     final groupColor = widget.group == null
         ? null
@@ -377,21 +381,29 @@ class _TabChipState extends State<_TabChip> {
             curve: ZbTokens.easeOut,
             width: pinned
                 ? ZbTokens.pinnedTabWidth
-                : (widget.compact
-                    ? ZbTokens.tabWidthCompact
-                    : ZbTokens.tabWidth),
-            margin: EdgeInsets.only(top: widget.selected ? 3 : 5),
+                : (compact ? ZbTokens.tabWidthCompact : ZbTokens.tabWidth),
+            // Chrome 桌面：活动标签贴顶贴底，直通工具栏；非活动标签稍内缩
+            margin: EdgeInsets.only(
+              top: widget.selected ? (compact ? 3 : 0) : 4,
+              bottom: widget.selected ? (compact ? 4 : 0) : 3,
+            ),
             decoration: BoxDecoration(
               color: _backgroundColor(zb, pinned),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(10),
-                bottom: Radius.circular(4),
-              ),
+              borderRadius: widget.selected
+                  ? (compact
+                      ? const BorderRadius.vertical(
+                          top: Radius.circular(10),
+                          bottom: Radius.circular(4),
+                        )
+                      : const BorderRadius.vertical(top: Radius.circular(12)))
+                  : BorderRadius.circular(9),
               border: Border.all(
-                color: widget.selected ? zb.hairline : Colors.transparent,
+                color: widget.selected && !widget.tab.isPrivate
+                    ? Colors.transparent
+                    : (widget.selected ? zb.hairline : Colors.transparent),
                 width: 1,
               ),
-              boxShadow: widget.selected ? zb.softShadow() : const [],
+              boxShadow: widget.selected && !compact ? const [] : zb.softShadow(),
             ),
             clipBehavior: Clip.antiAlias,
             child: Row(

@@ -77,7 +77,8 @@ class _ZbToolButtonState extends State<ZbToolButton> {
             height: 36,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(11),
+              // Chrome 风格：圆形按压反馈
+              borderRadius: BorderRadius.circular(18),
             ),
             alignment: Alignment.center,
             child: Icon(widget.icon, size: widget.size, color: iconColor),

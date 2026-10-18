@@ -9,9 +9,9 @@ import 'main_toolbar.dart'
     show mainMenuEntries, handleMainMenuAction, openQrScan;
 
 
-/// Firefox 风格底部导航栏（仅窄屏显示）。
+/// Chrome 风格底部导航栏（仅窄屏显示）。
 ///
-/// 悬浮圆角 dock：后退 / 前进 / 主页 / 扫一扫 / 菜单。
+/// 扁平工具条：贴底、无悬浮 dock、顶部细分隔线，按钮为圆形 hover 反馈。
 /// 菜单弹底部面板，条目与主菜单完全一致（复用 [mainMenuEntries]）。
 class BottomNavBar extends StatelessWidget {
   const BottomNavBar({super.key});
@@ -24,12 +24,9 @@ class BottomNavBar extends StatelessWidget {
     final tab = tm.active;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       decoration: BoxDecoration(
         color: zb.chromeElevated,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: zb.hairline, width: 1),
-        boxShadow: zb.panelShadow(),
+        border: Border(top: BorderSide(color: zb.hairline, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -38,7 +35,7 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.arrow_back,
             tooltip: '后退',
             size: 20,
-            extent: 42,
+            extent: 44,
             onTap: (tab?.canGoBack.value ?? false)
                 ? () => tab?.kernel.goBack()
                 : null,
@@ -47,7 +44,7 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.arrow_forward,
             tooltip: '前进',
             size: 20,
-            extent: 42,
+            extent: 44,
             onTap: (tab?.canGoForward.value ?? false)
                 ? () => tab?.kernel.goForward()
                 : null,
@@ -56,7 +53,7 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.home_outlined,
             tooltip: '主页',
             size: 20,
-            extent: 42,
+            extent: 44,
             onTap: () {
               context
                   .read<TabManager>()
@@ -67,14 +64,14 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.qr_code_scanner,
             tooltip: '扫一扫',
             size: 20,
-            extent: 42,
+            extent: 44,
             onTap: () => openQrScan(context),
           ),
           ZbIconAction(
             icon: ui.secondaryOpen ? Icons.tune : Icons.tune_outlined,
             tooltip: '工具箱',
             size: 20,
-            extent: 42,
+            extent: 44,
             selected: ui.secondaryOpen,
             onTap: ui.toggleSecondary,
           ),
@@ -82,7 +79,7 @@ class BottomNavBar extends StatelessWidget {
             icon: Icons.more_horiz,
             tooltip: '菜单',
             size: 20,
-            extent: 42,
+            extent: 44,
             onTap: () => _openBottomMenu(context),
           ),
         ],

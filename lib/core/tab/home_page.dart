@@ -154,7 +154,7 @@ class HomePage {
     display: flex; align-items: center; gap: 10px;
     background: var(--card); backdrop-filter: blur(14px);
     border: 1px solid var(--line);
-    border-radius: 18px; padding: 7px 7px 7px 18px;
+    border-radius: 24px; padding: 7px 7px 7px 18px;
     box-shadow: var(--shadow);
     transition: border-color .18s, box-shadow .18s, transform .18s;
   }

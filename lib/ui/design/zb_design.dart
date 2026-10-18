@@ -70,7 +70,11 @@ class ZbColors {
 
   // —— 外壳层次 ——
 
-  /// 标签栏底色（比工具栏略"深"一档，形成层次）
+  /// 标签条底色：窗口底色（比工具栏浅一档，Chrome 桌面结构）
+  Color get chromeStrip =>
+      isDark ? scheme.surfaceContainerLowest : scheme.surfaceContainerLowest;
+
+  /// 标签栏底色（历史兼容：与 [chromeStrip] 相同）
   Color get chrome =>
       isDark ? scheme.surfaceContainerLowest : scheme.surfaceContainerHigh;
 
@@ -81,9 +85,8 @@ class ZbColors {
   /// 内容区上下文色（页面失效时的兜底背景）
   Color get contentBackground => scheme.surface;
 
-  /// 活动标签底色：与工具栏/内容形成对比
-  Color get tabActive =>
-      isDark ? scheme.surfaceContainerHigh : scheme.surfaceContainerLowest;
+  /// 活动标签底色：与工具栏同色，形成"切入工具栏"的无缝连接（Chrome 风）
+  Color get tabActive => chromeElevated;
 
   /// 非活动标签底色
   Color get tabInactive => Colors.transparent;
@@ -280,7 +283,8 @@ class _ZbIconActionState extends State<ZbIconAction> {
             height: widget.extent,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(widget.extent * 0.30),
+              // Chrome 风格：hover/按下反馈为圆形
+              borderRadius: BorderRadius.circular(widget.extent / 2),
             ),
             alignment: Alignment.center,
             child: Icon(widget.icon, size: widget.size, color: fg),

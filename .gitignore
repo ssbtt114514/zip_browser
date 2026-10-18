@@ -44,3 +44,6 @@ Thumbs.db
 
 # Flutter 元数据（本地工具生成，勿提交）
 .metadata
+
+# 本地交付目录不入库
+/deliver_*/
