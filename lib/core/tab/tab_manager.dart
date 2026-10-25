@@ -394,10 +394,20 @@ class TabManager extends ChangeNotifier {
         '<h1>页面加载失败</h1>'
         '<p>当前浏览器内核初始化失败，可能是内核包与设备不匹配或内核损坏。</p>'
         '<p>请到 <kbd>菜单 → 内核管理</kbd> 切换回「系统内核」后再试。</p>'
-        '<p style="font-size:11.5px;color:#8496a6">${Uri.encodeComponent(detail)}</p>'
+        '<p style="font-size:11.5px;color:#8496a6">${_htmlEscape(detail)}</p>'
         '</div></body></html>';
+    // 整个 HTML 再经 Uri.encodeComponent 编码进 data URI，页面只会解码一次，
+    // 因此 detail 只需做 HTML 转义（防止异常文本破坏页面结构），
+    // 避免双重百分号编码导致错误详情显示为 %0A 之类的乱码。
     return 'data:text/html;charset=utf-8,${Uri.encodeComponent(html)}';
   }
+
+  /// 最小 HTML 转义（用于把异常文本安全地放进错误页）
+  static String _htmlEscape(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
 
   Future<void> _initialize(TabModel tab, String address) async {
     final pluginScripts = pluginManager.collectUserScripts();
@@ -744,6 +754,17 @@ class TabManager extends ChangeNotifier {
 
     for (final t in _tabs.toList()) {
       await closeTab(t.id);
+    }
+
+    // closeTab 在标签清空时会自动补建一个「主页」占位标签（面向普通关闭场景），
+    // 会话恢复需要精确重建快照内容，这里先移除占位标签，避免恢复后残留空白标签。
+    if (_tabs.isNotEmpty) {
+      final placeholder = _tabs.first;
+      _sniffAcc.remove(placeholder.id);
+      _sniffHinted.remove(placeholder.id);
+      await placeholder.close();
+      _tabs.clear();
+      _activeIndex = -1;
     }
 
     // 上限保护：一次恢复过多标签会在移动端串行创建大量 WebView，造成启动卡死
