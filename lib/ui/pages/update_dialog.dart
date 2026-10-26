@@ -19,6 +19,7 @@ class UpdateCheckHelper {
     final navigator = navigatorKey.currentState;
     if (navigator == null) return info;
     final ctx = navigator.context;
+    if (!ctx.mounted) return info;
     await showDialog<void>(
       context: ctx,
       builder: (dctx) {
@@ -33,11 +34,11 @@ class UpdateCheckHelper {
               children: [
                 Text('当前版本：${BrowserConstants.appVersion}'),
                 const SizedBox(height: 8),
-                Text('更新说明：',
+                const Text('更新说明：',
                     style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade600)),
+                        color: Colors.grey)),
                 const SizedBox(height: 4),
                 Flexible(
                   child: SingleChildScrollView(
