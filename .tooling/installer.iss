@@ -27,17 +27,17 @@
   #define NameSuffix "（单内核版）"
   #define FileSuffix "-single"
   #define DirSuffix " Single"
-  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F70"
+  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F70}"
 #elif Flavor == "none"
   #define NameSuffix "（无内核版）"
   #define FileSuffix "-no-kernel"
   #define DirSuffix " NoKernel"
-  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F71"
+  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F71}"
 #else
   #define NameSuffix ""
   #define FileSuffix ""
   #define DirSuffix ""
-  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F6E"
+  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F6E}"
 #endif
 
 #define MyAppPublisher "ssbtt114514"
@@ -45,7 +45,7 @@
 #define AppBuildDir "..\build\windows\x64\runner\Release"
 
 [Setup]
-AppId={"{"}{#AppIdGuid}
+AppId={#AppIdValue}
 AppName={#MyAppName}{#NameSuffix}
 AppVersion={#AppVersion}
 AppPublisher={#MyAppPublisher}
