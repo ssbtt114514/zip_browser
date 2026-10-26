@@ -36,7 +36,6 @@ class MainToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zb = context.zb;
     final tm = context.watch<TabManager>();
     final tab = tm.active;
     final config = context.watch<ConfigService>();
@@ -444,8 +443,8 @@ Future<void> showAboutDialog(BuildContext context, TabManager tm) async {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('版本 ${BrowserConstants.appVersion} · ${BuildFlavorInfo.label}',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            Text('版本 ${BrowserConstants.appVersion} · ${BuildFlavorInfo.label}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: ZbTokens.s4),
             Text(
               '可通过 zip 插件扩展功能与内核\n'

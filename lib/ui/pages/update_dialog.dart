@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/app_keys.dart';
 import '../../core/constants.dart';
@@ -18,7 +19,6 @@ class UpdateCheckHelper {
     final navigator = navigatorKey.currentState;
     if (navigator == null) return info;
     final ctx = navigator.context;
-    if (ctx == null) return info;
     await showDialog<void>(
       context: ctx,
       builder: (dctx) {

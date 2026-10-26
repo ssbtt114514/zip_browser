@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
-import '../core/app_keys.dart';
 import '../core/build_flavor.dart';
 import 'config_service.dart';
 import 'downloads_service.dart';
@@ -97,8 +96,6 @@ class DataExportService {
     final save = await FilePicker.platform.saveFile(
       fileName: name,
       bytes: bytes,
-      type: FileType.custom,
-      fileExtension: 'json',
     );
     if (save == null) return '已取消导出';
     return '已导出到：$save';

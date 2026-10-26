@@ -345,7 +345,6 @@ class SettingsPage extends StatelessWidget {
                   subtitle: const Text('查询 GitHub 最新版本',
                       style: TextStyle(fontSize: 11.5)),
                   onTap: () async {
-                    final navigator = Navigator.of(context);
                     final messenger = ScaffoldMessenger.of(context);
                     messenger.showSnackBar(
                       const SnackBar(

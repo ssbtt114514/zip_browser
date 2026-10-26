@@ -1,3 +1,4 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 // ignore: deprecated_member_use
 import 'package:material_color_utilities/palettes/core_palette.dart';
@@ -20,19 +21,6 @@ class ZbMonetEngine {
     } catch (_) {
       // 极端输入（全透明等）兜底：Material 3 自带的 HCT 种子方案
       return ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
-    }
-  }
-
-  /// 从系统莫奈色板（若有）或种子色取「源色」。
-  // ignore: deprecated_member_use
-  static Color sourceColorOf(MonetPalette? palette, Color fallbackSeed) {
-    if (palette == null) return fallbackSeed;
-    try {
-      // tone 40（亮色主色）对应的源色近似值
-      // ignore: deprecated_member_use
-      return Color(palette.primary.get(40));
-    } catch (_) {
-      return fallbackSeed;
     }
   }
 }

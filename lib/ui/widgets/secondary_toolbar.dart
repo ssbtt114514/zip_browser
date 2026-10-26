@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/tab/tab_manager.dart';
-import '../../core/tab/tab_model.dart';
 import '../../core/web/web_enhance_settings.dart';
 import '../../services/config_service.dart';
 import '../../services/ui_state.dart';

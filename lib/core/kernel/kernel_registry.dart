@@ -7,6 +7,7 @@ import '../../platform/plugin_ffi_kernel.dart';
 import '../../platform/stub_kernel.dart';
 import '../../platform/windows_system_kernel.dart';
 import '../../services/config_service.dart';
+import '../build_flavor.dart';
 import '../plugin/abi_utils.dart';
 import '../plugin/plugin_manager.dart';
 import 'browser_kernel.dart';
