@@ -146,8 +146,8 @@ class AppearancePage extends StatelessWidget {
                       if (v != null) s.setMonetSource(v);
                     },
                     child: Column(
-                      children: const [
-                        RadioListTile<MonetSource>(
+                      children: [
+                        const RadioListTile<MonetSource>(
                           value: MonetSource.system,
                           dense: true,
                           title: Text('系统壁纸取色'),
@@ -155,7 +155,7 @@ class AppearancePage extends StatelessWidget {
                               'Android 12+ 跟随壁纸；其他平台自动回退到内置引擎',
                               style: TextStyle(fontSize: 11.5)),
                         ),
-                        RadioListTile<MonetSource>(
+                        const RadioListTile<MonetSource>(
                           value: MonetSource.builtin,
                           dense: true,
                           title: Text('内置莫奈引擎'),

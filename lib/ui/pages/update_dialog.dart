@@ -32,7 +32,7 @@ class UpdateCheckHelper {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('当前版本：${BrowserConstants.appVersion}'),
+                const Text('当前版本：${BrowserConstants.appVersion}'),
                 const SizedBox(height: 8),
                 const Text('更新说明：',
                     style: TextStyle(
