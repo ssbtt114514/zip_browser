@@ -29,6 +29,11 @@ import sys
 import urllib.request
 from pathlib import Path
 
+# Windows 控制台默认 cp1252/gbk，打印中文会 UnicodeEncodeError，强制 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 PREREQS = [
     {
         "name": "VC_redist.x64.exe",

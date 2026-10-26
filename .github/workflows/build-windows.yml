@@ -214,6 +214,8 @@ jobs:
       # 修复「安装后无法运行」：干净系统缺 VCRUNTIME140.dll / WebView2 Runtime
       - name: Fetch installer prerequisites
         shell: pwsh
+        env:
+          PYTHONUTF8: '1'
         run: python tool/fetch_installer_prereqs.py build/installer-prereqs
 
       - name: Locate build output
