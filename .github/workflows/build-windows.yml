@@ -191,6 +191,31 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
+      # 防呆：webview_windows 通过 NuGet 的 WebView2 targets 拷贝
+      # WebView2Loader.dll，若因构建环境变动缺失，安装后双击 exe 会报
+      # 「丢失 WebView2Loader.dll」直接无法启动。这里兜底从插件 NuGet
+      # 缓存里找一份补进 Release 目录。
+      - name: Ensure WebView2Loader.dll ships in Release
+        shell: pwsh
+        run: |
+          $out = 'build/windows/x64/runner/Release'
+          if (Test-Path "$out/WebView2Loader.dll") {
+            Write-Host 'WebView2Loader.dll 已在 Release 输出中'
+          } else {
+            Write-Host 'WebView2Loader.dll 缺失，尝试从 NuGet 缓存兜底拷贝...'
+            $src = Get-ChildItem -Recurse -Path build -Filter 'WebView2Loader.dll' |
+                   Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+            if (-not $src) { throw 'Release 缺少 WebView2Loader.dll 且 NuGet 缓存中未找到' }
+            Copy-Item $src.FullName "$out/WebView2Loader.dll"
+            Write-Host ("已拷贝：{0}" -f $src.FullName)
+          }
+
+      # —— 安装器运行时依赖（VC++ 运行库 + WebView2 常青版引导器）——
+      # 修复「安装后无法运行」：干净系统缺 VCRUNTIME140.dll / WebView2 Runtime
+      - name: Fetch installer prerequisites
+        shell: pwsh
+        run: python tool/fetch_installer_prereqs.py build/installer-prereqs
+
       - name: Locate build output
         id: out
         shell: pwsh
