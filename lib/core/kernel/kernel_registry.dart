@@ -112,6 +112,11 @@ class KernelRegistry {
 
     result.add(_systemDescriptor());
 
+    // 单内核 / 无内核风味：不枚举独立内核包与插件内核
+    if (!BuildFlavorInfo.kernelManagementEnabled) {
+      return result;
+    }
+
     // 独立安装包内核
     final km = kernelManager;
     if (km != null) {
@@ -232,6 +237,10 @@ class KernelRegistry {
 
   /// 创建一个内核实例（每个标签页一个）
   BrowserKernel createKernel(String tabId) {
+    // 无内核 / 单内核风味：忽略插件与独立内核包，直接回落系统内核
+    if (!BuildFlavorInfo.kernelManagementEnabled) {
+      return createSystemKernel();
+    }
     final selected = config.selectedKernelId;
 
     if (selected != null && selected.startsWith('kernel.')) {
@@ -269,6 +278,8 @@ class KernelRegistry {
 
   /// 直接创建系统内核
   BrowserKernel createSystemKernel() {
+    // 无内核风味：占位内核，不加载任何网页
+    if (!BuildFlavorInfo.webEnabled) return StubKernel();
     if (Platform.isAndroid) return AndroidSystemKernel();
     if (Platform.isWindows) return WindowsSystemKernel();
     if (Platform.isLinux) return LinuxWebKitKernel();

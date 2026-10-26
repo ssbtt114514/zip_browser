@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/tab/tab_manager.dart';
+import '../../core/tab/tab_model.dart';
 import '../../core/web/web_enhance_settings.dart';
 import '../../services/config_service.dart';
 import '../../services/ui_state.dart';
 import '../../services/web_enhance_service.dart';
 import '../../services/zoom_service.dart';
 import '../design/zb_design.dart';
+import 'main_toolbar.dart' show handlePageToolsAction;
 import 'zb_tool_button.dart';
 
 /// 二级工具栏（工具箱）：资源嗅探、阅读模式、无图、网页滤镜、缩放、全屏。
@@ -44,12 +46,9 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
     final hasTab = tab != null;
     final zoom = tab == null ? 1.0 : tm.zoomFor(tab);
 
-    return Container(
+    return ZbGlassBox(
       height: ZbTokens.secondaryBarHeight,
-      decoration: BoxDecoration(
-        color: zb.chromeElevated,
-        border: Border(bottom: BorderSide(color: zb.hairline, width: 1)),
-      ),
+      bottomBorder: true,
       padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s6),
       child: Row(
         children: [
@@ -58,20 +57,6 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  // 资源嗅探
-                  ZbToolButton(
-                    icon: ui.sniffOpen
-                        ? Icons.satellite_alt
-                        : Icons.satellite_alt_outlined,
-                    tooltip: '资源嗅探（媒体/图片/脚本）',
-                    selected: ui.sniffOpen,
-                    onTap: hasTab
-                        ? () {
-                            ui.toggleSniff();
-                            if (ui.sniffOpen) tab.kernel.triggerSniff();
-                          }
-                        : null,
-                  ),
                   // 阅读模式
                   ZbToolButton(
                     icon: Icons.chrome_reader_mode_outlined,
@@ -163,19 +148,6 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
                     onTap: hasTab ? () => tm.zoomIn() : null,
                   ),
                   _divider(zb),
-                  // 按站点记忆缩放
-                  ZbToolButton(
-                    icon: zoomSvc.perSiteEnabled
-                        ? Icons.bookmark_added_outlined
-                        : Icons.bookmark_remove_outlined,
-                    tooltip: zoomSvc.perSiteEnabled
-                        ? '按站点记忆缩放：已开启'
-                        : '按站点记忆缩放：已关闭',
-                    selected: zoomSvc.perSiteEnabled,
-                    onTap: () => zoomSvc
-                        .setPerSiteEnabled(!zoomSvc.perSiteEnabled),
-                  ),
-                  _divider(zb),
                   // 全屏
                   ZbToolButton(
                     icon: ui.fullscreen
@@ -184,6 +156,48 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
                     tooltip: ui.fullscreen ? '退出全屏（F11）' : '全屏（F11）',
                     selected: ui.fullscreen,
                     onTap: () => ui.toggleFullscreen(),
+                  ),
+                  // 更多工具：嗅探 / 站点缩放记忆 / 翻译 / AI 解读
+                  PopupMenuButton<String>(
+                    tooltip: '更多工具',
+                    splashRadius: 16,
+                    icon: Icon(Icons.more_horiz,
+                        size: 19,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.78)),
+                    onSelected: (value) => _onMoreTool(context, value),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'sniff',
+                        height: 40,
+                        child: _MoreToolRow(Icons.satellite_alt_outlined,
+                            '资源嗅探（媒体/图片/脚本）'),
+                      ),
+                      PopupMenuItem(
+                        value: 'per_site_zoom',
+                        height: 40,
+                        child: _MoreToolRow(
+                            zoomSvc.perSiteEnabled
+                                ? Icons.bookmark_added
+                                : Icons.bookmark_add_outlined,
+                            zoomSvc.perSiteEnabled
+                                ? '按站点记忆缩放：已开启'
+                                : '按站点记忆缩放：已关闭'),
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      const PopupMenuItem(
+                        value: 'translate',
+                        height: 40,
+                        child: _MoreToolRow(Icons.translate, '翻译网页 / 选中文本'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'ai_read',
+                        height: 40,
+                        child: _MoreToolRow(Icons.auto_awesome, 'AI 解读本页'),
+                      ),
+                    ],
                   ),
                   // 桌面版网站
                   ZbToolButton(
@@ -215,6 +229,24 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
     );
   }
 
+  /// 「更多工具」弹层动作
+  Future<void> _onMoreTool(BuildContext context, String value) async {
+    final tm = context.read<TabManager>();
+    final tab = tm.active;
+    switch (value) {
+      case 'sniff':
+        context.read<BrowserUiState>().openSniff();
+        tab?.kernel.triggerSniff();
+      case 'per_site_zoom':
+        final svc = context.read<ZoomService>();
+        await svc.setPerSiteEnabled(!svc.perSiteEnabled);
+      case 'translate':
+      case 'ai_read':
+        if (tab == null || !context.mounted) return;
+        await handlePageToolsAction(context, value, tab);
+    }
+  }
+
   Widget _divider(ZbColors zb) => Container(
         width: 1,
         height: 20,
@@ -233,5 +265,26 @@ class _SecondaryToolbarState extends State<SecondaryToolbar> {
       case WebFilterMode.gray:
         return Icons.palette_outlined;
     }
+  }
+}
+
+/// 「更多工具」菜单行
+class _MoreToolRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MoreToolRow(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: ZbTokens.s5),
+        Expanded(
+          child: Text(label,
+              style: const TextStyle(fontSize: 13.5)),
+        ),
+      ],
+    );
   }
 }

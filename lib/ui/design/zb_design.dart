@@ -1,4 +1,9 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/theme/appearance_settings.dart';
 
 /// 设计令牌：尺寸、间距、动效时长。
 ///
@@ -131,6 +136,12 @@ class ZbColors {
   Color get suggestionHighlight =>
       scheme.primary.withValues(alpha: isDark ? 0.20 : 0.10);
 
+  // —— 液态玻璃 ——
+  /// 外壳栏在液态玻璃模式下使用的半透明底色
+  Color get glassSurface =>
+      isDark ? scheme.surfaceContainerLow.withValues(alpha: 0.62)
+             : scheme.surfaceContainerLow.withValues(alpha: 0.60);
+
   /// 低强度阴影（浮层/omnibox）
   List<BoxShadow> softShadow() => isDark
       ? const []
@@ -157,6 +168,69 @@ extension ZbColorsX on BuildContext {
   ZbColors get zb => ZbColors.of(this);
 }
 
+/// 是否开启液态玻璃（来自外观设置；未接入 provider 时返回 false）
+bool isLiquidGlass(BuildContext context) {
+  try {
+    return context.watch<AppearanceSettings>().liquidGlass;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 液态玻璃容器：背景模糊 + 半透明面 + 高光描边。
+/// 关闭液态玻璃时等价于普通不透明容器。
+///
+/// 用于外壳各栏（标签栏 / 工具栏 / 二级工具栏 / 底部导航）。
+class ZbGlassBox extends StatelessWidget {
+  final Widget child;
+  final double? height;
+  final EdgeInsetsGeometry padding;
+  final Color? color;
+  final bool bottomBorder;
+  final bool topBorder;
+
+  const ZbGlassBox({
+    super.key,
+    required this.child,
+    this.height,
+    this.padding = EdgeInsets.zero,
+    this.color,
+    this.bottomBorder = false,
+    this.topBorder = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final zb = context.zb;
+    final glass = isLiquidGlass(context);
+    final surface = color ?? (glass ? zb.glassSurface : zb.chromeElevated);
+    final border = Border(
+      bottom: bottomBorder
+          ? BorderSide(color: zb.hairline, width: 1)
+          : BorderSide.none,
+      top: topBorder
+          ? BorderSide(color: zb.hairline, width: 1)
+          : BorderSide.none,
+    );
+    final box = Container(
+      height: height,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: surface,
+        border: border,
+      ),
+      child: child,
+    );
+    if (!glass) return box;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: box,
+      ),
+    );
+  }
+}
+
 /// 浏览器外壳的一条横向"栏"（标签栏 / 工具栏 / 书签栏通用底）。
 class ZbChromeBar extends StatelessWidget {
   final Widget child;
@@ -178,21 +252,12 @@ class ZbChromeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zb = context.zb;
-    return Container(
+    return ZbGlassBox(
       height: height,
       padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? zb.chromeElevated,
-        border: Border(
-          bottom: bottomBorder
-              ? BorderSide(color: zb.hairline, width: 1)
-              : BorderSide.none,
-          top: topBorder
-              ? BorderSide(color: zb.hairline, width: 1)
-              : BorderSide.none,
-        ),
-      ),
+      color: color,
+      bottomBorder: bottomBorder,
+      topBorder: topBorder,
       child: child,
     );
   }

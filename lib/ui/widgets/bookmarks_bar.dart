@@ -19,12 +19,9 @@ class BookmarksBar extends StatelessWidget {
     final tm = context.watch<TabManager>();
     final items = bm.items;
 
-    return Container(
+    return ZbGlassBox(
       height: ZbTokens.bookmarksBarHeight,
-      decoration: BoxDecoration(
-        color: zb.chromeElevated,
-        border: Border(bottom: BorderSide(color: zb.hairline, width: 1)),
-      ),
+      bottomBorder: true,
       padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s4),
       child: Row(
         children: [

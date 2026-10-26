@@ -18,16 +18,12 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zb = context.zb;
     final tm = context.watch<TabManager>();
     final ui = context.watch<BrowserUiState>();
     final tab = tm.active;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: zb.chromeElevated,
-        border: Border(top: BorderSide(color: zb.hairline, width: 1)),
-      ),
+    return ZbGlassBox(
+      topBorder: true,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -113,7 +109,6 @@ class BottomNavBar extends StatelessWidget {
                   const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   dense: true,
-                  enabled: e.value != 'zoom_show',
                   leading: Icon(e.icon, size: 20, color: zb2.textMuted),
                   title: Text(e.label,
                       style:
@@ -123,9 +118,7 @@ class BottomNavBar extends StatelessWidget {
                       : Text(e.hint!,
                           style:
                               TextStyle(fontSize: 11, color: zb2.textFaint)),
-                  onTap: e.value == 'zoom_show'
-                      ? null
-                      : () => Navigator.pop(ctx, e.value),
+                  onTap: () => Navigator.pop(ctx, e.value),
                 ),
               ],
             ],

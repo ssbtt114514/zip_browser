@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/build_flavor.dart';
 import '../../core/constants.dart';
 import '../../core/kernel/kernel_registry.dart';
 import '../../core/kernel/kernel_types.dart';
 import '../../platform/windows_system_kernel.dart';
+import '../../services/ai_service.dart';
+import '../../services/bookmarks_service.dart';
 import '../../services/config_service.dart';
+import '../../services/data_export_service.dart';
+import '../../services/downloads_service.dart';
+import '../../services/history_service.dart';
+import '../../services/paths.dart';
 import 'appearance_page.dart';
 import 'desktop_mode_page.dart';
+import 'devtools_page.dart';
 import 'home_settings_page.dart';
 import 'kernels_page.dart';
 import 'reading_page.dart';
 import 'search_engines_page.dart';
+import 'update_dialog.dart';
 import '../widgets/adaptive.dart';
 
 /// 设置主页：分类卡片入口 + 当前内核概要 + 内容安全
@@ -164,14 +173,21 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
                 const Divider(height: 1, indent: 56),
-                _NavTile(
-                  icon: Icons.memory_outlined,
-                  title: '内核管理',
-                  subtitle: '安装 / 切换 / 卸载独立内核包',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const KernelsPage()),
+                if (BuildFlavorInfo.kernelManagementEnabled)
+                  _NavTile(
+                    icon: Icons.memory_outlined,
+                    title: '内核管理',
+                    subtitle: '安装 / 切换 / 卸载独立内核包',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const KernelsPage()),
+                    ),
                   ),
-                ),
+                if (!BuildFlavorInfo.kernelManagementEnabled)
+                  const ListTile(
+                    dense: true,
+                    title: Text('当前为单内核构建：仅使用系统内核',
+                        style: TextStyle(fontSize: 12)),
+                  ),
               ],
             ),
           ),
@@ -248,6 +264,156 @@ class SettingsPage extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+
+          // —— AI 解读 ——
+          const _SectionTitle('AI 解读'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome, size: 20),
+                  title: const Text('API 地址',
+                      style: TextStyle(fontSize: 14)),
+                  subtitle: Text(
+                    config.aiBaseUrl.isEmpty
+                        ? '默认 ${AiService.kDefaultBaseUrl}'
+                        : config.aiBaseUrl,
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  onTap: () => _editTextField(
+                    context,
+                    title: 'OpenAI 兼容 API 地址',
+                    hint: '例如 https://api.deepseek.com/v1',
+                    initial: config.aiBaseUrl,
+                    save: config.setAiBaseUrl,
+                  ),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.key_outlined, size: 20),
+                  title: const Text('API Key', style: TextStyle(fontSize: 14)),
+                  subtitle: Text(
+                    config.aiApiKey.isEmpty
+                        ? '未配置（AI 解读不可用）'
+                        : '已配置（${config.aiApiKey.length} 位）',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  onTap: () => _editTextField(
+                    context,
+                    title: 'API Key',
+                    hint: 'sk-…',
+                    initial: config.aiApiKey,
+                    obscure: true,
+                    save: config.setAiApiKey,
+                  ),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.smart_toy_outlined, size: 20),
+                  title: const Text('模型', style: TextStyle(fontSize: 14)),
+                  subtitle: Text(
+                    config.aiModel.isEmpty
+                        ? '默认 ${AiService.kDefaultModel}'
+                        : config.aiModel,
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  onTap: () => _editTextField(
+                    context,
+                    title: '模型名',
+                    hint: '例如 gpt-4o-mini / deepseek-chat',
+                    initial: config.aiModel,
+                    save: config.setAiModel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // —— 系统 ——
+          const _SectionTitle('系统'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.system_update_alt, size: 20),
+                  title: const Text('检查更新',
+                      style: TextStyle(fontSize: 14)),
+                  subtitle: const Text('查询 GitHub 最新版本',
+                      style: TextStyle(fontSize: 11.5)),
+                  onTap: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                          content: Text('正在检查更新…'),
+                          duration: Duration(seconds: 2)),
+                    );
+                    try {
+                      final info = await UpdateCheckHelper.checkWithUi();
+                      if (info == null) {
+                        messenger.showSnackBar(
+                            const SnackBar(content: Text('已是最新版本')));
+                      }
+                    } catch (e) {
+                      messenger.showSnackBar(
+                          SnackBar(content: Text('检查失败：$e')));
+                    }
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.ios_share, size: 20),
+                  title: const Text('导出用户数据',
+                      style: TextStyle(fontSize: 14)),
+                  subtitle: const Text('设置 / 书签 / 历史 / 下载 → JSON 备份',
+                      style: TextStyle(fontSize: 11.5)),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final msg = await DataExportService.export(
+                      context.read<ConfigService>(),
+                      bookmarks: context.read<BookmarksService>(),
+                      history: context.read<HistoryService>(),
+                      downloads: context.read<DownloadsService>(),
+                    );
+                    messenger.showSnackBar(SnackBar(
+                        content: Text(msg),
+                        duration: const Duration(seconds: 3)));
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.restore, size: 20),
+                  title: const Text('导入用户数据',
+                      style: TextStyle(fontSize: 14)),
+                  subtitle: const Text('从 JSON 备份恢复（重启生效）',
+                      style: TextStyle(fontSize: 11.5)),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final msg = await DataExportService.import(
+                      context.read<ConfigService>(),
+                      profilesDir: AppPaths.profilesDir,
+                    );
+                    messenger.showSnackBar(SnackBar(
+                        content: Text(msg),
+                        duration: const Duration(seconds: 4)));
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                _NavTile(
+                  icon: Icons.developer_mode,
+                  title: '开发者工具箱',
+                  subtitle: '构建信息 / 内核诊断 / 崩溃日志',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const DevToolsPage()),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
           const Center(
             child: Text(
@@ -292,6 +458,40 @@ class SettingsPage extends StatelessWidget {
     if (url.contains('baidu.com')) return '百度';
     if (url.contains('you.com')) return 'You';
     return '自定义';
+  }
+
+  /// 通用单行文本编辑（AI 配置等）
+  Future<void> _editTextField(
+    BuildContext context, {
+    required String title,
+    required String hint,
+    required String initial,
+    required Future<void> Function(String) save,
+    bool obscure = false,
+  }) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          obscureText: obscure,
+          autofocus: true,
+          decoration: InputDecoration(hintText: hint),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    await save(result);
   }
 
   /// 编辑域名列表（逗号/换行/空格分隔）

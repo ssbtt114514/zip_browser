@@ -29,6 +29,9 @@ class ConfigService extends ChangeNotifier {
   static const _kAdBlock = 'content.ad_block';
   static const _kAdBlockCustom = 'content.ad_block_custom';
   static const _kAdBlockAllow = 'content.ad_block_allow';
+  static const _kAiBaseUrl = 'ai.base_url';
+  static const _kAiApiKey = 'ai.api_key';
+  static const _kAiModel = 'ai.model';
 
   final SharedPreferences _prefs;
 
@@ -155,6 +158,19 @@ class ConfigService extends ChangeNotifier {
   Future<void> setAdBlockAllowDomains(List<String> domains) =>
       _apply(() => _prefs.setString(
           _kAdBlockAllow, jsonEncode(domains.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList())));
+
+  // —— AI 解读（OpenAI 兼容接口，用户自配）——
+  String get aiBaseUrl => _prefs.getString(_kAiBaseUrl) ?? '';
+  Future<void> setAiBaseUrl(String value) =>
+      _apply(() => _prefs.setString(_kAiBaseUrl, value.trim()));
+
+  String get aiApiKey => _prefs.getString(_kAiApiKey) ?? '';
+  Future<void> setAiApiKey(String value) =>
+      _apply(() => _prefs.setString(_kAiApiKey, value.trim()));
+
+  String get aiModel => _prefs.getString(_kAiModel) ?? '';
+  Future<void> setAiModel(String value) =>
+      _apply(() => _prefs.setString(_kAiModel, value.trim()));
 
   static List<String> _stringList(String? raw) {
     if (raw == null || raw.isEmpty) return const [];

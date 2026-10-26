@@ -4,24 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/build_flavor.dart';
 import '../../core/constants.dart';
 import '../../core/plugin/plugin_manager.dart';
 import '../../core/tab/tab_manager.dart';
 import '../../core/tab/tab_model.dart';
 import '../../core/tab/url_utils.dart';
+import '../../services/ai_service.dart';
 import '../../services/config_service.dart';
 import '../../services/share_helper.dart';
 import '../../services/session_service.dart';
+import '../../services/translate_service.dart';
 import '../../services/ui_state.dart';
-import '../../services/zoom_service.dart';
 import '../design/zb_design.dart';
 import '../pages/bookmarks_page.dart';
+import '../pages/devtools_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import '../pages/kernels_page.dart';
 import '../pages/plugins_page.dart';
 import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
+import '../pages/update_dialog.dart';
 import '../pages/userscripts_page.dart';
 import 'address_bar.dart';
 import 'zb_tool_button.dart';
@@ -41,12 +45,9 @@ class MainToolbar extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final minimal = width < 720 && config.bottomNavEnabled;
 
-    return Container(
+    return ZbGlassBox(
       height: ZbTokens.toolbarHeight,
-      decoration: BoxDecoration(
-        color: zb.chromeElevated,
-        border: Border(bottom: BorderSide(color: zb.hairline, width: 1)),
-      ),
+      bottomBorder: true,
       padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s4),
       child: Row(
         children: [
@@ -91,7 +92,7 @@ class MainToolbar extends StatelessWidget {
                 onTap: ui.toggleSecondary,
               ),
             ),
-            const _ExtensionButtons(),
+            if (BuildFlavorInfo.pluginSystemEnabled) const _ExtensionButtons(),
             const _MainMenuButton(),
           ],
         ],
@@ -132,14 +133,16 @@ class MainMenuEntry {
       {this.hint, this.dividerBefore = false});
 }
 
-/// 组装主菜单条目列表。
+/// 组装主菜单条目列表（按「标签 → 页面 → 数据 → 开关 → 工具 → 系统」分组）。
 List<MainMenuEntry> mainMenuEntries(
   BuildContext context, {
   required TabManager tm,
   required ConfigService config,
   required TabModel? tab,
 }) {
+  final flavor = BuildFlavorInfo.current;
   return [
+    // —— 标签 ——
     const MainMenuEntry('new_tab', Icons.add, '新建标签页', hint: 'Ctrl+T'),
     const MainMenuEntry('new_private', Icons.visibility_off_outlined,
         '新建隐私标签', hint: 'Ctrl+Shift+N'),
@@ -150,39 +153,42 @@ List<MainMenuEntry> mainMenuEntries(
       hint: 'Ctrl+Shift+T',
     ),
     const MainMenuEntry('restore_session', Icons.history_toggle_off, '恢复上次会话'),
+    // —— 页面 ——
     const MainMenuEntry('reload', Icons.refresh, '刷新',
         hint: 'F5', dividerBefore: true),
     const MainMenuEntry('hard_reload', Icons.cached, '强制刷新（忽略缓存）',
         hint: 'Ctrl+Shift+R'),
+    const MainMenuEntry('find', Icons.search, '页面中查找', hint: 'Ctrl+F'),
+    if (flavor != BuildFlavor.none) ...[
+      const MainMenuEntry('translate', Icons.translate, '翻译网页 / 选中文本'),
+      const MainMenuEntry('ai_read', Icons.auto_awesome, 'AI 解读本页'),
+    ],
+    // —— 数据 ——
     const MainMenuEntry('bookmarks', Icons.bookmark_outline, '书签',
         hint: 'Ctrl+Shift+O', dividerBefore: true),
     const MainMenuEntry('history', Icons.history, '历史记录', hint: 'Ctrl+H'),
     const MainMenuEntry('downloads', Icons.download_outlined, '下载内容', hint: 'Ctrl+J'),
-    const MainMenuEntry('find', Icons.search, '页面中查找', hint: 'Ctrl+F'),
-    MainMenuEntry(
-      'zoom_show',
-      Icons.zoom_out_map,
-      '缩放 ${ZoomService.label(tm.active == null ? 1.0 : tm.zoomFor(tm.active!))}',
-      dividerBefore: true,
-    ),
-    const MainMenuEntry('zoom_in', Icons.add, '放大', hint: 'Ctrl++'),
-    const MainMenuEntry('zoom_out', Icons.remove, '缩小', hint: 'Ctrl+-'),
-    const MainMenuEntry('zoom_reset', Icons.restart_alt, '重置缩放', hint: 'Ctrl+0'),
-    const MainMenuEntry('desktop', Icons.desktop_windows, '桌面版网站',
-        dividerBefore: true),
+    const MainMenuEntry('clear', Icons.cleaning_services_outlined, '清除浏览数据'),
+    // —— 开关 ——
     const MainMenuEntry('bookmarks_bar', Icons.bookmarks_outlined, '显示书签栏',
-        hint: 'Ctrl+Shift+B'),
+        hint: 'Ctrl+Shift+B', dividerBefore: true),
     const MainMenuEntry('sniff_auto', Icons.satellite_alt_outlined, '自动嗅探媒体资源'),
     const MainMenuEntry('js', Icons.javascript_outlined, '启用 JavaScript'),
     const MainMenuEntry('adblock', Icons.block_outlined, '广告拦截'),
+    const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
+    // —— 工具 ——
     const MainMenuEntry('scan', Icons.qr_code_scanner, '扫一扫', dividerBefore: true),
     const MainMenuEntry('share', Icons.share, '分享'),
-    const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
-    const MainMenuEntry('clear', Icons.cleaning_services_outlined, '清除浏览数据',
+    // —— 系统 ——
+    if (flavor == BuildFlavor.full) ...[
+      const MainMenuEntry('kernels', Icons.memory_outlined, '内核管理',
+          dividerBefore: true),
+      const MainMenuEntry('plugins', Icons.extension, '插件管理'),
+      const MainMenuEntry('userscripts', Icons.code, '用户脚本'),
+    ],
+    const MainMenuEntry('devtools', Icons.developer_mode, '开发者工具箱',
         dividerBefore: true),
-    const MainMenuEntry('kernels', Icons.memory_outlined, '内核管理'),
-    const MainMenuEntry('plugins', Icons.extension, '插件管理'),
-    const MainMenuEntry('userscripts', Icons.code, '用户脚本'),
+    const MainMenuEntry('check_update', Icons.system_update_alt, '检查更新'),
     const MainMenuEntry('settings', Icons.settings, '设置'),
     const MainMenuEntry('about', Icons.info_outline, '关于 Zip Browser'),
   ];
@@ -208,13 +214,11 @@ List<PopupMenuEntry<String>> _popupItems(
       ));
       continue;
     }
-    if (e.value == 'desktop' ||
-        e.value == 'bookmarks_bar' ||
+    if (e.value == 'bookmarks_bar' ||
         e.value == 'sniff_auto' ||
         e.value == 'js' ||
         e.value == 'adblock') {
       final checked = switch (e.value) {
-        'desktop' => tab?.desktopMode.value ?? false,
         'bookmarks_bar' => config.showBookmarksBar,
         'sniff_auto' => config.autoSniff,
         'js' => config.jsEnabled,
@@ -225,14 +229,6 @@ List<PopupMenuEntry<String>> _popupItems(
         value: e.value,
         checked: checked,
         height: 38,
-        child: _MenuRow(e.icon, e.label, hint: e.hint),
-      ));
-      continue;
-    }
-    if (e.value == 'zoom_show') {
-      items.add(PopupMenuItem<String>(
-        enabled: false,
-        height: 34,
         child: _MenuRow(e.icon, e.label, hint: e.hint),
       ));
       continue;
@@ -288,14 +284,43 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
       );
     case 'find':
       uiState.openFind();
+    case 'translate':
+      if (tab != null && context.mounted) {
+        await _translatePage(context, tab);
+      }
+    case 'ai_read':
+      if (tab != null && context.mounted) {
+        await _aiReadPage(context, tab);
+      }
+    case 'check_update':
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('正在检查更新…'), duration: Duration(seconds: 2)),
+      );
+      try {
+        final info = await UpdateCheckHelper.checkWithUi();
+        if (info == null && context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('已是最新版本')));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('检查失败：$e')));
+        }
+      }
+    case 'devtools':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const DevToolsPage()),
+      );
     case 'zoom_in':
       await tm.zoomIn();
     case 'zoom_out':
       await tm.zoomOut();
     case 'zoom_reset':
       await tm.resetZoom();
-    case 'desktop':
-      if (tab != null) await tm.toggleDesktopMode(tab);
     case 'bookmarks_bar':
       await config.setShowBookmarksBar(!config.showBookmarksBar);
     case 'sniff_auto':
@@ -419,7 +444,7 @@ Future<void> showAboutDialog(BuildContext context, TabManager tm) async {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('版本 ${BrowserConstants.appVersion}',
+            const Text('版本 ${BrowserConstants.appVersion} · ${BuildFlavorInfo.label}',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: ZbTokens.s4),
             Text(
@@ -457,6 +482,173 @@ Future<void> showAboutDialog(BuildContext context, TabManager tm) async {
       );
     },
   );
+}
+
+/// 页面工具共享入口：主菜单与二级工具栏「更多工具」共用。
+Future<void> handlePageToolsAction(
+    BuildContext context, String value, TabModel tab) async {
+  switch (value) {
+    case 'translate':
+      await _translatePage(context, tab);
+    case 'ai_read':
+      await _aiReadPage(context, tab);
+  }
+}
+
+/// 翻译当前页（选中文本优先，否则取正文前 3000 字）。
+Future<void> _translatePage(BuildContext context, TabModel tab) async {
+  final messenger = ScaffoldMessenger.of(context);
+  // 展示加载提示
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(mainAxisSize: MainAxisSize.min, children: [
+        CircularProgressIndicator(),
+        SizedBox(width: 16),
+        Text('正在翻译…'),
+      ]),
+    ),
+  );
+  try {
+    final text = await TranslateService.extractText(
+        (js) => tab.kernel.evaluateJavascript(js));
+    if (text.isEmpty) throw Exception('页面上没有可翻译的文本');
+    final result = await TranslateService.translate(text);
+    if (!context.mounted) return;
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    await showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        icon: const Icon(Icons.translate),
+        title: const Text('翻译结果（中文）'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 420),
+          child: SingleChildScrollView(
+            child: SelectableText(result,
+                style: const TextStyle(fontSize: 13.5, height: 1.6)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: result));
+              if (dctx.mounted) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                      content: Text('已复制'), duration: Duration(seconds: 1)),
+                );
+              }
+            },
+            child: const Text('复制'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    messenger.showSnackBar(SnackBar(content: Text('翻译失败：$e')));
+  }
+}
+
+/// AI 解读当前页（需在设置中配置 OpenAI 兼容接口）。
+Future<void> _aiReadPage(BuildContext context, TabModel tab) async {
+  final config = context.read<ConfigService>();
+  if (!AiService.isConfigured(config)) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        icon: const Icon(Icons.auto_awesome),
+        title: const Text('先配置 AI 接口'),
+        content: const Text(
+            'AI 解读需要一个 OpenAI 兼容接口（OpenAI / DeepSeek / Kimi 等均可）。\n\n'
+            '到「设置 → AI 解读」填入 API 地址、Key 和模型名即可使用。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dctx, true),
+              child: const Text('去设置')),
+        ],
+      ),
+    );
+    if (go == true && context.mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SettingsPage()),
+      );
+    }
+    return;
+  }
+
+  final messenger = ScaffoldMessenger.of(context);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(mainAxisSize: MainAxisSize.min, children: [
+        CircularProgressIndicator(),
+        SizedBox(width: 16),
+        Text('AI 正在阅读页面…'),
+      ]),
+    ),
+  );
+  try {
+    final text = await AiService.extractPageText(
+        (js) => tab.kernel.evaluateJavascript(js));
+    if (text.isEmpty) throw Exception('页面上没有可读的文本');
+    final answer = await AiService.chat(
+      config,
+      '请阅读以下网页内容，用中文总结要点（分条列出），'
+          '并指出页面的主题、关键信息和值得注意的内容：\n\n$text',
+      system: '你是网页解读助手，用简体中文、结构化地输出要点，不编造内容。',
+    );
+    if (!context.mounted) return;
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    await showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        icon: const Icon(Icons.auto_awesome),
+        title: const Text('AI 解读'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 460),
+          child: SingleChildScrollView(
+            child: SelectableText(answer,
+                style: const TextStyle(fontSize: 13.5, height: 1.6)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: answer));
+              if (dctx.mounted) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                      content: Text('已复制'), duration: Duration(seconds: 1)),
+                );
+              }
+            },
+            child: const Text('复制'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  } catch (e) {
+    if (context.mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    messenger.showSnackBar(SnackBar(content: Text('AI 解读失败：$e')));
+  }
 }
 
 /// 清除浏览数据确认框

@@ -130,12 +130,55 @@ class AppearancePage extends StatelessWidget {
 
           // —— 动态取色（莫奈 / Material You）——
           Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.auto_awesome),
+                  title: const Text('莫奈取色'),
+                  subtitle: const Text('基于 HCT 色彩空间生成 Android 12 同款配色'),
+                  value: s.monetEnabled,
+                  onChanged: s.setMonetEnabled,
+                ),
+                if (s.monetEnabled)
+                  RadioGroup<MonetSource>(
+                    groupValue: s.monetSource,
+                    onChanged: (v) {
+                      if (v != null) s.setMonetSource(v);
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<MonetSource>(
+                          value: MonetSource.system,
+                          dense: true,
+                          title: const Text('系统壁纸取色'),
+                          subtitle: const Text(
+                              'Android 12+ 跟随壁纸；其他平台自动回退到内置引擎',
+                              style: TextStyle(fontSize: 11.5)),
+                        ),
+                        RadioListTile<MonetSource>(
+                          value: MonetSource.builtin,
+                          dense: true,
+                          title: const Text('内置莫奈引擎'),
+                          subtitle: const Text(
+                              '任意平台用下方主色调作为种子生成全套莫奈色板',
+                              style: TextStyle(fontSize: 11.5)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // —— 液态玻璃 ——
+          Card(
             child: SwitchListTile(
-              secondary: const Icon(Icons.auto_awesome),
-              title: const Text('动态取色（Material You）'),
-              subtitle: const Text('Android 12+ 跟随壁纸生成主题色，其他系统自动回退到主色调'),
-              value: s.monetEnabled,
-              onChanged: s.setMonetEnabled,
+              secondary: const Icon(Icons.blur_on),
+              title: const Text('液态玻璃'),
+              subtitle: const Text('标签栏 / 工具栏 / 底部栏半透明 + 背景模糊（性能略降）'),
+              value: s.liquidGlass,
+              onChanged: s.setLiquidGlass,
             ),
           ),
           const SizedBox(height: 16),

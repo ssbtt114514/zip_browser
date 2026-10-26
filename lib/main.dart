@@ -26,6 +26,7 @@ import 'services/session_service.dart';
 import 'services/ui_state.dart';
 import 'services/url_suggest_service.dart';
 import 'services/ad_blocker_service.dart';
+import 'services/crash_log.dart';
 import 'services/web_enhance_service.dart';
 import 'services/zoom_service.dart';
 
@@ -49,6 +50,12 @@ class _SessionLifecycleObserver extends WidgetsBindingObserver {
 }
 
 Future<void> main() async {
+  // 全局错误捕获：未处理异常写入 crash.log（数据目录/logs），
+  // 便于「安装后无法运行」时定位问题。
+  await runWithCrashLog(_runApp);
+}
+
+Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. 目录

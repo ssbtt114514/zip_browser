@@ -19,20 +19,41 @@
 #ifndef AppVersion
   #define AppVersion "0.7.0"
 #endif
+#ifndef Flavor
+  #define Flavor "full"
+#endif
+
+#if Flavor == "single"
+  #define NameSuffix "（单内核版）"
+  #define FileSuffix "-single"
+  #define DirSuffix " Single"
+  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F70"
+#elif Flavor == "none"
+  #define NameSuffix "（无内核版）"
+  #define FileSuffix "-no-kernel"
+  #define DirSuffix " NoKernel"
+  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F71"
+#else
+  #define NameSuffix ""
+  #define FileSuffix ""
+  #define DirSuffix ""
+  #define AppIdGuid "4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F6E"
+#endif
+
 #define MyAppPublisher "ssbtt114514"
 #define MyAppExeName "zip_browser.exe"
 #define AppBuildDir "..\build\windows\x64\runner\Release"
 
 [Setup]
-AppId={{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F6E}
-AppName={#MyAppName}
+AppId={"{"}{#AppIdGuid}
+AppName={#MyAppName}{#NameSuffix}
 AppVersion={#AppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\Zip Browser
-DefaultGroupName=Zip Browser
+DefaultDirName={autopf}\Zip Browser{#DirSuffix}
+DefaultGroupName=Zip Browser{#DirSuffix}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=..\dist
-OutputBaseFilename=zip-browser-windows-x64-setup
+OutputBaseFilename=zip-browser-windows-x64{#FileSuffix}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -53,9 +74,9 @@ Source: "..\build\installer-prereqs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags:
 Source: "..\build\installer-prereqs\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}{#NameSuffix}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\卸载 {#MyAppName}{#NameSuffix}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}{#NameSuffix}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "立即运行 {#MyAppName}"; Flags: nowait postinstall skipifsilent

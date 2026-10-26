@@ -35,12 +35,10 @@ class BrowserTabBar extends StatelessWidget {
     final tabs = tm.tabs;
     final active = tm.active;
 
-    return Container(
+    return ZbGlassBox(
       height: compact ? ZbTokens.compactTabStripHeight : ZbTokens.tabStripHeight,
-      decoration: BoxDecoration(
-        color: compact ? zb.chromeElevated : zb.chromeStrip,
-        border: Border(bottom: BorderSide(color: zb.hairline, width: 1)),
-      ),
+      color: compact ? null : zb.chromeStrip,
+      bottomBorder: true,
       child: Row(
         children: [
           Expanded(

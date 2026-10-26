@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
 
 import 'appearance_settings.dart';
+import 'monet_engine.dart';
 import 'style_mode.dart';
 
 /// 莫奈动态色板类型别名。
@@ -18,11 +19,18 @@ typedef MonetPalette = CorePalette;
 
 /// 主题引擎：根据 [AppearanceSettings] 生成亮/暗 ThemeData。
 class ThemeEngine {
-  /// 计算颜色方案：优先使用莫奈动态色，否则用 seed 色生成。
+  /// 计算颜色方案：
+  /// - 莫奈 + 系统色板可用（Android 12+）→ 系统壁纸取色
+  /// - 莫奈 + 内置引擎 / 其余平台 → 内置莫奈引擎从种子色生成全套色调
+  /// - 关闭莫奈 → Material 3 种子色方案
   static ColorScheme _scheme(
       AppearanceSettings s, Brightness brightness, MonetPalette? monet) {
-    if (s.monetEnabled && monet != null) {
-      return monet.toColorScheme(brightness: brightness);
+    if (s.monetEnabled) {
+      if (s.monetSource == MonetSource.system && monet != null) {
+        return monet.toColorScheme(brightness: brightness);
+      }
+      // 内置莫奈引擎：所有平台可用，任意种子色生成莫奈色调
+      return ZbMonetEngine.schemeFromSeed(s.seedColor, brightness);
     }
     return ColorScheme.fromSeed(seedColor: s.seedColor, brightness: brightness);
   }

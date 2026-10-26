@@ -118,6 +118,11 @@ jobs:
     name: Build Windows x64
     runs-on: windows-latest
     needs: [analyze]
+    strategy:
+      fail-fast: false
+      matrix:
+        # 构建风味：full=完整版 single=单内核版 none=无内核版
+        flavor: [full, single, none]
     steps:
       - uses: actions/checkout@v4
 
@@ -189,7 +194,31 @@ jobs:
 
       # —— App 本体 ——
       - name: Build Windows release
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
+
+      # 兼底：把 VC++ 运行库 DLL 直接放进应用目录（app-local deployment）。
+      # 即使目标机没装 VC++ Redistributable、且安装器静默安装失败，
+      # exe 也能正常加载 —— 双保险修复「安装后无法运行」。
+      - name: Bundle VC++ runtime DLLs (app-local)
+        shell: pwsh
+        run: |
+          $out = 'build/windows/x64/runner/Release'
+          $redistRoot = $env:VCToolsRedistDir
+          if (-not $redistRoot) { throw '未找到 VCToolsRedistDir（需先运行 Set up MSVC）' }
+          $crt = Get-ChildItem -Path $redistRoot -Recurse -Filter 'vcruntime140.dll' |
+                 Where-Object { $_.Directory.Name -match 'x64|CRT' } |
+                 Select-Object -First 1
+          if (-not $crt) { throw '未找到 VC++ 运行库 DLL' }
+          $dir = $crt.Directory.FullName
+          foreach ($dll in @('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll','concrt140.dll')) {
+            $src = Join-Path $dir $dll
+            if (Test-Path $src) {
+              Copy-Item $src $out -Force
+              Write-Host "已捆绑 $dll"
+            } else {
+              Write-Host "跳过 $dll（不存在）"
+            }
+          }
 
       # 防呆：webview_windows 通过 NuGet 的 WebView2 targets 拷贝
       # WebView2Loader.dll，若因构建环境变动缺失，安装后双击 exe 会报
@@ -237,12 +266,17 @@ jobs:
           $out = '${{ steps.out.outputs.dir }}'
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
-          # 只打包应用本体。
+          # 只打包应用本体（按构建风味命名）。
           # 内核插件包与独立内核包一律由 build-kernel 工作流产出：那个工作流会构建全部
           # 5 个平台的库之后再打包，而本工作流只构建了 Windows 一份。若在此处打包
           # example_plugins/*，会得到「清单声明 5 个平台、包内只有 Windows」的不一致包
           # （tool/verify_packages.dart 会判定为打包问题）。
-          Compress-Archive -Path "$out/*" -DestinationPath dist/zip-browser-windows-x64.zip -Force
+          $suffix = switch ('${{ matrix.flavor }}') {
+            'single' { '-single' }
+            'none'   { '-no-kernel' }
+            default  { '' }
+          }
+          Compress-Archive -Path "$out/*" -DestinationPath "dist/zip-browser-windows-x64$suffix.zip" -Force
 
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
@@ -262,7 +296,7 @@ jobs:
           $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup*' -Recurse -Filter ISCC.exe |
                   Select-Object -First 1
           if (-not $iscc) { throw '未找到 ISCC.exe' }
-          & $iscc.FullName ".tooling\installer.iss" "/DAppVersion=$ver"
+          & $iscc.FullName ".tooling\installer.iss" "/DAppVersion=$ver" "/DFavor=${{ matrix.flavor }}"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 失败：$LASTEXITCODE" }
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
@@ -271,14 +305,14 @@ jobs:
       - name: Upload Windows archive
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-windows-x64
+          name: zip-browser-windows-x64-${{ matrix.flavor }}
           path: dist/*.zip
           if-no-files-found: error
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-windows-x64-setup
+          name: zip-browser-windows-x64-setup-${{ matrix.flavor }}
           path: dist/*.exe
           if-no-files-found: error
 

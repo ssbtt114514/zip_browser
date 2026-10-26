@@ -12,6 +12,9 @@ enum DensityOption { comfortable, compact }
 /// 圆角等级
 enum RadiusLevel { none, small, medium, large }
 
+/// 莫奈取色源
+enum MonetSource { system, builtin }
+
 /// 外观设置：可自定义的视觉参数
 class AppearanceSettings extends ChangeNotifier {
   static const String _kMode = 'appearance.theme_mode';
@@ -24,6 +27,8 @@ class AppearanceSettings extends ChangeNotifier {
   static const String _kBgImage = 'appearance.home_bg_image';
   static const String _kTrueBlack = 'appearance.true_black';
   static const String _kMonet = 'appearance.monet';
+  static const String _kMonetSource = 'appearance.monet_source';
+  static const String _kLiquidGlass = 'appearance.liquid_glass';
   static const String _kFontFamily = 'appearance.font_family';
 
   final SharedPreferences _prefs;
@@ -187,6 +192,29 @@ class AppearanceSettings extends ChangeNotifier {
 
   Future<void> setMonetEnabled(bool value) async {
     await _prefs.setBool(_kMonet, value);
+    notifyListeners();
+  }
+
+  /// 取色源：system = 系统壁纸（Android 12+，其余平台自动回退内置引擎）；
+  /// builtin = 内置莫奈引擎（任意平台用种子色生成全套色调色板）
+  MonetSource get monetSource {
+    final v = _prefs.getString(_kMonetSource);
+    return MonetSource.values.firstWhere(
+      (e) => e.name == v,
+      orElse: () => MonetSource.system,
+    );
+  }
+
+  Future<void> setMonetSource(MonetSource source) async {
+    await _prefs.setString(_kMonetSource, source.name);
+    notifyListeners();
+  }
+
+  // —— 液态玻璃：外壳半透明 + 背景模糊 ——
+  bool get liquidGlass => _prefs.getBool(_kLiquidGlass) ?? false;
+
+  Future<void> setLiquidGlass(bool value) async {
+    await _prefs.setBool(_kLiquidGlass, value);
     notifyListeners();
   }
 
