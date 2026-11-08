@@ -40,10 +40,11 @@
   gecko 三个安装包；gecko 风味在 CI 侧编译内核并打包为 `.zbk` 内置，
   首次启动由 `seedBundledKernel()` 安装并选中，失败静默回落系统内核。
 - **x86 架构补齐**：Android 内核库改为四 ABI（arm64-v8a / armeabi-v7a /
-  x86 / x86_64）；Android APK 同时产出 x86。Windows / Linux 提供 x64 与
-  arm64 两架构（Flutter 无桌面 32 位引擎）。
-- **Windows arm64**：改用 `windows-latest` 交叉构建，不再依赖托管 arm64
-  运行器；内核 DLL 用 MSVC 编译并校验 16 个 ABI 导出符号。
+  x86 / x86_64）；Android APK 同时产出 x86。Linux 提供 x64 与 arm64；
+  Windows 应用包固定 x64（Flutter 的 windows 构建不支持 `--target-platform`，
+  x64 主机无法产出 arm64 应用包）。
+- **内核 DLL 交叉编译**：build-kernel 用 MSVC 编译 Windows arm64 内核并校验
+  16 个 ABI 导出符号，保证内核库覆盖 ARM64。
 - **文字识别（OCR）**：菜单「工具 → 文字识别（图片取字）」，选图取字、
   可一键复制。Android 内置 ML Kit 离线识别（中文脚本，图片不上传）；
   Windows / Linux 走「设置 → AI 解读」配置的多模态接口。

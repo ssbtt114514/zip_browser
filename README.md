@@ -221,7 +221,7 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 | [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android 三风味 release APK（none / chromium / gecko），含 arm64-v8a / armeabi-v7a / x86 / x86_64；gecko 风味用 NDK 编译四 ABI 并内置 `.zbk`；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
 | [build-linux.yml](.github/workflows/build-linux.yml) | Linux 三风味桌面版，x64 / arm64 两架构（`zip-browser-linux-<arch>-<flavor>.tar.gz`）；gecko 风味本机编译内核并内置；先跑单元测试 |
 | [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号；产出 `lite_kernel.zip` / `hello_ffi_kernel.zip` / `zb_lite_kernel.zbk`，另加 `zb_chromium_kernel.zbk`（自带固定版本 Chromium 运行时）与 `zb_gecko_kernel.zbk`（Gecko 引擎适配包）；推 `v*` tag 时把这 5 个包挂到 Release |
-| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 构建三风味（none / chromium / gecko）× x64 / arm64 的 Windows release；gecko 用 MSVC 编译内核 DLL 并内置 → 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 构建三风味（none / chromium / gecko）的 Windows x64 release；gecko 用 MSVC 编译内核 DLL 并内置 → 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |
 
 ### 8. 引擎内核包：Chromium 固定版本 / Gecko 适配包
 

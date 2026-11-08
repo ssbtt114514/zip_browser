@@ -8,7 +8,7 @@ name: build-windows
 #   chromium Chromium 内核版：系统 WebView2（Edge Chromium）
 #   gecko    Gecko 内核版：构建时编译内核 DLL，随包内置
 # 架构：x64 与 arm64，均在 windows-latest 上交叉构建
-# （Flutter 通过 --target-platform 选择目标架构，MSVC 提供 ARM64 交叉工具链）。
+# 架构固定 x64：Flutter 的 windows 构建不接受 --target-platform。
 #
 # 本工作流做四件事：
 #   1. 静态检查与单元测试（analyze 必须 0 error / 0 warning，test 必须全绿）
@@ -109,52 +109,18 @@ jobs:
         run: flutter test --reporter expanded
 
   # ---------------------------------------------------------------
-  # 2) 构建 Windows 桌面版并打包（风味 × 架构矩阵）
+  # 2) 构建 Windows 桌面版并打包（风味矩阵，架构固定 x64）
+  # Flutter 的 windows 构建不接受 --target-platform，无法在 x64 主机上产出
+  # arm64 应用包；arm64 内核库仍由 build-kernel.yml 用 MSVC 交叉编译验证。
   # ---------------------------------------------------------------
   windows:
-    name: Build Windows ${{ matrix.arch }}-${{ matrix.flavor }}
-    runs-on: ${{ matrix.runner }}
+    name: Build Windows x64-${{ matrix.flavor }}
+    runs-on: windows-latest
     needs: [analyze]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: x64
-            runner: windows-latest
-            cmake_arch: x64
-            redist_dir: x64
-            flavor: chromium
-            suffix: '-chromium'
-          - arch: x64
-            runner: windows-latest
-            cmake_arch: x64
-            redist_dir: x64
-            flavor: gecko
-            suffix: '-gecko'
-          - arch: x64
-            runner: windows-latest
-            cmake_arch: x64
-            redist_dir: x64
-            flavor: none
-            suffix: '-no-kernel'
-          - arch: arm64
-            runner: windows-latest
-            cmake_arch: ARM64
-            redist_dir: arm64
-            flavor: chromium
-            suffix: '-chromium'
-          - arch: arm64
-            runner: windows-latest
-            cmake_arch: ARM64
-            redist_dir: arm64
-            flavor: gecko
-            suffix: '-gecko'
-          - arch: arm64
-            runner: windows-latest
-            cmake_arch: ARM64
-            redist_dir: arm64
-            flavor: none
-            suffix: '-no-kernel'
+        flavor: [chromium, gecko, none]
     steps:
       - uses: actions/checkout@v4
 
@@ -173,17 +139,17 @@ jobs:
       - name: Integrate native surface plugin
         run: python tool/enable_native_surface.py
 
-      - name: Set up MSVC (${{ matrix.cmake_arch }})
+      - name: Set up MSVC (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.arch }}
+          arch: x64
 
       # Gecko 风味：用 CMake + MSVC 编译内核 DLL，装配进内核包并放入资产目录。
       - name: Build bundled Gecko kernel DLL
         if: matrix.flavor == 'gecko'
         shell: pwsh
         run: |
-          cmake -S native_kernels/zb_lite_kernel -B build/gecko-kernel -A ${{ matrix.cmake_arch }} `
+          cmake -S native_kernels/zb_lite_kernel -B build/gecko-kernel -A x64 `
                 -DCMAKE_BUILD_TYPE=Release
           if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败：$LASTEXITCODE" }
           cmake --build build/gecko-kernel --config Release --parallel
@@ -232,7 +198,6 @@ jobs:
       - name: Build Windows release
         run: >-
           flutter build windows --release
-          --target-platform windows-${{ matrix.arch }}
           --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
 
       # 兜底：把 VC++ 运行库 DLL 直接放进应用目录（app-local deployment）。
@@ -241,11 +206,11 @@ jobs:
       - name: Bundle VC++ runtime DLLs (app-local)
         shell: pwsh
         run: |
-          $out = 'build/windows/${{ matrix.arch }}/runner/Release'
+          $out = 'build/windows/x64/runner/Release'
           $redistRoot = $env:VCToolsRedistDir
           if (-not $redistRoot) { throw '未找到 VCToolsRedistDir（需先运行 Set up MSVC）' }
           $crt = Get-ChildItem -Path $redistRoot -Recurse -Filter 'vcruntime140.dll' |
-                 Where-Object { $_.Directory.FullName -match "\\${{ matrix.redist_dir }}\\" } |
+                 Where-Object { $_.Directory.FullName -match "\\x64\\" } |
                  Select-Object -First 1
           if (-not $crt) { throw '未找到 VC++ 运行库 DLL' }
           $dir = $crt.Directory.FullName
@@ -266,13 +231,13 @@ jobs:
       - name: Ensure WebView2Loader.dll ships in Release
         shell: pwsh
         run: |
-          $out = 'build/windows/${{ matrix.arch }}/runner/Release'
+          $out = 'build/windows/x64/runner/Release'
           if (Test-Path "$out/WebView2Loader.dll") {
             Write-Host 'WebView2Loader.dll 已在 Release 输出中'
           } else {
             Write-Host 'WebView2Loader.dll 缺失，尝试从 NuGet 缓存兜底拷贝...'
             $src = Get-ChildItem -Recurse -Path build -Filter 'WebView2Loader.dll' |
-                   Where-Object { $_.FullName -match '${{ matrix.arch }}' } | Select-Object -First 1
+                   Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
             if (-not $src) { throw 'Release 缺少 WebView2Loader.dll 且 NuGet 缓存中未找到' }
             Copy-Item $src.FullName "$out/WebView2Loader.dll"
             Write-Host ("已拷贝：{0}" -f $src.FullName)
@@ -289,7 +254,7 @@ jobs:
         id: out
         shell: pwsh
         run: |
-          $dir = 'build/windows/${{ matrix.arch }}/runner/Release'
+          $dir = 'build/windows/x64/runner/Release'
           if (-not (Test-Path $dir)) { throw "未找到构建输出目录：$dir" }
           $exe = Join-Path $dir 'zip_browser.exe'
           if (-not (Test-Path $exe)) { throw "未找到可执行文件：$exe" }
@@ -303,9 +268,13 @@ jobs:
         run: |
           $out = '${{ steps.out.outputs.dir }}'
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $suffix = '${{ matrix.suffix }}'
+          $suffix = switch ('${{ matrix.flavor }}') {
+            'chromium' { '-chromium' }
+            'gecko'    { '-gecko' }
+            default    { '-no-kernel' }
+          }
           Compress-Archive -Path "$out/*" `
-            -DestinationPath "dist/zip-browser-windows-${{ matrix.arch }}$suffix.zip" -Force
+            -DestinationPath "dist/zip-browser-windows-x64$suffix.zip" -Force
 
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
@@ -327,7 +296,7 @@ jobs:
           if (-not $iscc) { throw '未找到 ISCC.exe' }
           & $iscc.FullName ".tooling\installer.iss" `
               "/DAppVersion=$ver" "/DFlavor=${{ matrix.flavor }}" `
-              "/DTargetArch=${{ matrix.arch }}"
+              "/DTargetArch=x64"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 失败：$LASTEXITCODE" }
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))
@@ -336,14 +305,14 @@ jobs:
       - name: Upload Windows archive
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-windows-${{ matrix.arch }}-${{ matrix.flavor }}
+          name: zip-browser-windows-x64-${{ matrix.flavor }}
           path: dist/*.zip
           if-no-files-found: error
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-windows-${{ matrix.arch }}-setup-${{ matrix.flavor }}
+          name: zip-browser-windows-x64-setup-${{ matrix.flavor }}
           path: dist/*.exe
           if-no-files-found: error
 

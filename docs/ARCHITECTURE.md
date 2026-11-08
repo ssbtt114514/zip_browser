@@ -284,7 +284,7 @@ window.zipBrowser.on('event', data => ...)
 | 平台 | 系统内核 | 承载插件 | 插件内核 | 状态 |
 |------|----------|----------|----------|------|
 | Android | Android System WebView | `webview_flutter` | `.zbk`（随包内置） | ✅ 4 ABI |
-| Windows | WebView2 (Edge Chromium) | `webview_windows` | `.zbk`（随包内置） | ✅ x64 / arm64 |
+| Windows | WebView2 (Edge Chromium) | `webview_windows` | `.zbk`（随包内置） | ✅ x64 |
 | Linux | WebKitGTK 4.1 | `media_kit` 等 | `.zbk`（随包内置） | ✅ x64 / arm64 |
 | macOS | 规划（WKWebView / CEF） | 待定 | `.dylib` | 🚧 占位 |
 
@@ -296,7 +296,8 @@ window.zipBrowser.on('event', data => ...)
 > gecko 风味随包内置 `.zbk` 内核，安装后固定版本、不再依赖系统组件。
 >
 > 应用包只产 Flutter 官方支持的架构：Android 四 ABI（含 x86），
-> Windows / Linux 仅 x64 与 arm64；内核原生库仍按四 Android ABI 编译。
+> Linux 为 x64 / arm64，Windows 仅 x64（Flutter 的 windows 构建不支持
+> `--target-platform`）；内核原生库仍按四 Android ABI 与 Windows arm64 编译。
 
 ---
 
