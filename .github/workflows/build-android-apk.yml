@@ -160,7 +160,6 @@ jobs:
           src=build/app/outputs/flutter-apk
           cp "$src/app-arm64-v8a-release.apk" "dist/zip-browser-android-arm64-v8a$SUFFIX.apk"
           cp "$src/app-armeabi-v7a-release.apk" "dist/zip-browser-android-armeabi-v7a$SUFFIX.apk"
-          cp "$src/app-x86-release.apk" "dist/zip-browser-android-x86$SUFFIX.apk"
           cp "$src/app-x86_64-release.apk" "dist/zip-browser-android-x86_64$SUFFIX.apk"
           cp "$src/app-release.apk" "dist/zip-browser-android-universal$SUFFIX.apk"
           ls -lh dist
@@ -177,7 +176,6 @@ jobs:
           checks = {
             f'{base}arm64-v8a{suffix}.apk': 'lib/arm64-v8a/libapp.so',
             f'{base}armeabi-v7a{suffix}.apk': 'lib/armeabi-v7a/libapp.so',
-            f'{base}x86{suffix}.apk': 'lib/x86/libapp.so',
             f'{base}x86_64{suffix}.apk': 'lib/x86_64/libapp.so',
             f'{base}universal{suffix}.apk': 'lib/arm64-v8a/libapp.so',
           }
@@ -191,10 +189,10 @@ jobs:
                       ok = need in names
                       print(('[OK]   ' if ok else '[FAIL] '), need)
                       assert ok, f'{path}: 缺少 {need}'
-          # universal 应包含全部四个 ABI
+          # universal 应包含 Flutter 支持的全部三个 ABI
           with zipfile.ZipFile(f'{base}universal{suffix}.apk') as z:
               names = set(n for n in z.namelist() if n.startswith('lib/'))
-              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'):
+              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86_64'):
                   assert any(n.startswith(f'lib/{abi}/') for n in names), f'universal 缺 {abi}'
           print('APK 内容校验通过')
           PY
