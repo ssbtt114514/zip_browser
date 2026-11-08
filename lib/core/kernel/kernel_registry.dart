@@ -14,7 +14,7 @@ import 'browser_kernel.dart';
 import 'kernel_manager.dart';
 import 'kernel_types.dart';
 
-/// 可选用内核描述（供内核管理页与设置页展示）
+/// 可选用内核描述（供设置页展示）
 class KernelDescriptor {
   final String id;
   final String displayName;
@@ -112,11 +112,6 @@ class KernelRegistry {
     final result = <KernelDescriptor>[];
 
     result.add(_systemDescriptor());
-
-    // 单内核 / 无内核风味：不枚举独立内核包与插件内核
-    if (!BuildFlavorInfo.kernelManagementEnabled) {
-      return result;
-    }
 
     // 独立安装包内核
     final km = kernelManager;
@@ -238,11 +233,12 @@ class KernelRegistry {
 
   /// 创建一个内核实例（每个标签页一个）
   BrowserKernel createKernel(String tabId) {
-    // 无内核 / 单内核风味：忽略插件与独立内核包，直接回落系统内核
-    if (!BuildFlavorInfo.kernelManagementEnabled) {
-      return createSystemKernel();
-    }
-    final selected = config.selectedKernelId;
+    // 无内核风味：任何情况下都使用占位内核
+    if (!BuildFlavorInfo.webEnabled) return StubKernel();
+    // 仅 Gecko 风味使用随包内置内核；Chromium 风味固定系统 WebView
+    final selected = BuildFlavorInfo.current == BuildFlavor.gecko
+        ? config.selectedKernelId
+        : null;
 
     if (selected != null && selected.startsWith('kernel.')) {
       final pkg = kernelManager?.byKernelId(selected);

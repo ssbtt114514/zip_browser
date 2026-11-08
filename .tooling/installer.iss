@@ -20,29 +20,45 @@
   #define AppVersion "0.7.0"
 #endif
 #ifndef Flavor
-  #define Flavor "full"
+  #define Flavor "chromium"
+#endif
+#ifndef TargetArch
+  #define TargetArch "x64"
 #endif
 
-#if Flavor == "single"
-  #define NameSuffix "（单内核版）"
-  #define FileSuffix "-single"
-  #define DirSuffix " Single"
-  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F70}"
-#elif Flavor == "none"
+; —— 构建风味：chromium（系统 WebView2）/ gecko（内置 Gecko 内核）/ none（无内核）——
+#if Flavor == "none"
   #define NameSuffix "（无内核版）"
   #define FileSuffix "-no-kernel"
   #define DirSuffix " NoKernel"
   #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F71}"
+#elif Flavor == "gecko"
+  #define NameSuffix "（Gecko 内核版）"
+  #define FileSuffix "-gecko"
+  #define DirSuffix " Gecko"
+  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F72}"
 #else
-  #define NameSuffix ""
-  #define FileSuffix ""
-  #define DirSuffix ""
-  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F6E}"
+  #define NameSuffix "（Chromium 内核版）"
+  #define FileSuffix "-chromium"
+  #define DirSuffix " Chromium"
+  #define AppIdValue "{{4C2F6B8A-9D3E-4A11-8F7B-2E5A1C9D3F70}"
+#endif
+
+; —— 目标架构：x64 / arm64 ——
+#if TargetArch == "arm64"
+  #define AppBuildDir "..\build\windows\arm64\runner\Release"
+  #define FileArch "-arm64"
+  #define ArchAllowed "arm64"
+  #define ArchInstallMode "arm64"
+#else
+  #define AppBuildDir "..\build\windows\x64\runner\Release"
+  #define FileArch ""
+  #define ArchAllowed "x64compatible"
+  #define ArchInstallMode "x64compatible"
 #endif
 
 #define MyAppPublisher "ssbtt114514"
 #define MyAppExeName "zip_browser.exe"
-#define AppBuildDir "..\build\windows\x64\runner\Release"
 
 [Setup]
 AppId={#AppIdValue}
@@ -53,11 +69,11 @@ DefaultDirName={autopf}\Zip Browser{#DirSuffix}
 DefaultGroupName=Zip Browser{#DirSuffix}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=..\dist
-OutputBaseFilename=zip-browser-windows-x64{#FileSuffix}-setup
+OutputBaseFilename=zip-browser-windows{#FileArch}{#FileSuffix}-setup
 Compression=lzma2
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64compatible
-ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode={#ArchInstallMode}
+ArchitecturesAllowed={#ArchAllowed}
 ; Flutter 默认应用图标（CI 里由 flutter create 生成，相对仓库根）
 SetupIconFile=..\windows\runner\resources\app_icon.ico
 WizardStyle=modern

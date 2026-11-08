@@ -393,7 +393,7 @@ class TabManager extends ChangeNotifier {
         '<div class="e">⚠️</div>'
         '<h1>页面加载失败</h1>'
         '<p>当前浏览器内核初始化失败，可能是内核包与设备不匹配或内核损坏。</p>'
-        '<p>请到 <kbd>菜单 → 内核管理</kbd> 切换回「系统内核」后再试。</p>'
+        '<p>请到 <kbd>设置 → 浏览器内核</kbd> 切换回「系统内核」后再试。</p>'
         '<p style="font-size:11.5px;color:#8496a6">${_htmlEscape(detail)}</p>'
         '</div></body></html>';
     // 整个 HTML 再经 Uri.encodeComponent 编码进 data URI，页面只会解码一次，

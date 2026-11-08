@@ -1,8 +1,10 @@
 name: build-android-apk
 
 # 构建 Android 安装包（release APK，universal 单包 + 按 ABI 拆分包），
-# 覆盖三种构建风味：full=完整版 / single=单内核版 / none=无内核版
+# 覆盖三种构建风味：none=无内核版 / chromium=Chromium 内核版 / gecko=Gecko 内核版
 # （--dart-define=ZIP_FLAVOR=...，见 lib/core/build_flavor.dart）。
+# Chromium 风味使用系统 WebView，无需编译内核；Gecko 风味在构建时交叉编译
+# 四个 ABI 的内核并作为资产随 APK 打包。
 # 注意：android/ 工程（含相机 FileProvider 等原生定制）随仓库提交，
 #       CI 直接构建，不再 flutter create。
 #
@@ -70,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flavor: [full, single, none]
+        flavor: [none, chromium, gecko]
     steps:
       - uses: actions/checkout@v4
 
@@ -89,10 +91,25 @@ jobs:
       - name: Patch Android Gradle (compileSdk / minSdk / ML Kit, idempotent)
         run: python3 tool/patch_android_gradle.py
 
+      # Gecko 风味：NDK 交叉编译 arm64-v8a / armeabi-v7a / x86 / x86_64
+      # 四个 ABI 的内核，装配成 .zbk 放进资产目录，首次启动自动安装。
+      - name: Build bundled Gecko kernel (NDK)
+        if: matrix.flavor == 'gecko'
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
+          "$SDKMANAGER" --install "ndk;28.2.13676358" > /dev/null
+          export ANDROID_NDK="$SDK/ndk/28.2.13676358"
+          python3 tool/build_engine_kernels.py --platform android
+          mkdir -p assets/bundled
+          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk
+          unzip -l assets/bundled/kernel.zbk
+
       - name: Resolve dependencies
         run: flutter pub get
 
-      # 按 CPU 架构拆分成 3 个安装包（arm64-v8a / armeabi-v7a / x86_64），
+      # 按 CPU 架构拆分成 4 个安装包（arm64-v8a / armeabi-v7a / x86 / x86_64），
       # 体积更小；另产一个 universal 全架构包（单包兼容所有设备）。
       - name: Build split-per-abi APKs
         run: flutter build apk --release --split-per-abi --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
@@ -104,15 +121,17 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ matrix.flavor }}" in
-            single) SUFFIX="-single" ;;
-            none)   SUFFIX="-no-kernel" ;;
-            *)      SUFFIX="" ;;
+            none)     SUFFIX="-no-kernel" ;;
+            chromium) SUFFIX="-chromium" ;;
+            gecko)    SUFFIX="-gecko" ;;
+            *)        SUFFIX="" ;;
           esac
           echo "SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
           mkdir -p dist
           src=build/app/outputs/flutter-apk
           cp "$src/app-arm64-v8a-release.apk" "dist/zip-browser-android-arm64-v8a$SUFFIX.apk"
           cp "$src/app-armeabi-v7a-release.apk" "dist/zip-browser-android-armeabi-v7a$SUFFIX.apk"
+          cp "$src/app-x86-release.apk" "dist/zip-browser-android-x86$SUFFIX.apk"
           cp "$src/app-x86_64-release.apk" "dist/zip-browser-android-x86_64$SUFFIX.apk"
           cp "$src/app-release.apk" "dist/zip-browser-android-universal$SUFFIX.apk"
           ls -lh dist
@@ -129,6 +148,7 @@ jobs:
           checks = {
             f'{base}arm64-v8a{suffix}.apk': 'lib/arm64-v8a/libapp.so',
             f'{base}armeabi-v7a{suffix}.apk': 'lib/armeabi-v7a/libapp.so',
+            f'{base}x86{suffix}.apk': 'lib/x86/libapp.so',
             f'{base}x86_64{suffix}.apk': 'lib/x86_64/libapp.so',
             f'{base}universal{suffix}.apk': 'lib/arm64-v8a/libapp.so',
           }
@@ -142,10 +162,10 @@ jobs:
                       ok = need in names
                       print(('[OK]   ' if ok else '[FAIL] '), need)
                       assert ok, f'{path}: 缺少 {need}'
-          # universal 应包含全部三个 ABI
+          # universal 应包含全部四个 ABI
           with zipfile.ZipFile(f'{base}universal{suffix}.apk') as z:
               names = set(n for n in z.namelist() if n.startswith('lib/'))
-              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86_64'):
+              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'):
                   assert any(n.startswith(f'lib/{abi}/') for n in names), f'universal 缺 {abi}'
           print('APK 内容校验通过')
           PY

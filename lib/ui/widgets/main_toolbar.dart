@@ -20,7 +20,6 @@ import '../pages/bookmarks_page.dart';
 import '../pages/devtools_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
-import '../pages/kernels_page.dart';
 import '../pages/ocr_page.dart';
 import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
@@ -183,10 +182,8 @@ class _MainMenuButton extends StatelessWidget {
                 Icons.document_scanner_outlined),
             _item(context, '分享', 'share', Icons.share),
             _item(context, '开发者工具箱', 'devtools', Icons.developer_mode),
-            if (BuildFlavorInfo.current == BuildFlavor.full) ...[
-              _item(context, '内核管理', 'kernels', Icons.memory_outlined),
+            if (BuildFlavorInfo.current != BuildFlavor.none)
               _item(context, '用户脚本', 'userscripts', Icons.code),
-            ],
           ],
         ),
         _Submenu(
@@ -343,11 +340,9 @@ List<MainMenuEntry> mainMenuEntries(
     const MainMenuEntry('ocr_text', Icons.document_scanner_outlined, '文字识别（图片取字）'),
     const MainMenuEntry('share', Icons.share, '分享'),
     // —— 系统 ——
-    if (flavor == BuildFlavor.full) ...[
-      const MainMenuEntry('kernels', Icons.memory_outlined, '内核管理',
+    if (flavor != BuildFlavor.none)
+      const MainMenuEntry('userscripts', Icons.code, '用户脚本',
           dividerBefore: true),
-      const MainMenuEntry('userscripts', Icons.code, '用户脚本'),
-    ],
     const MainMenuEntry('devtools', Icons.developer_mode, '开发者工具箱',
         dividerBefore: true),
     const MainMenuEntry('check_update', Icons.system_update_alt, '检查更新'),
@@ -463,11 +458,6 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
     case 'clear':
       if (!context.mounted) return;
       await _confirmClear(context, tm);
-    case 'kernels':
-      if (!context.mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const KernelsPage()),
-      );
     case 'userscripts':
       if (!context.mounted) return;
       await Navigator.of(context).push(

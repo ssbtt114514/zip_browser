@@ -1,19 +1,16 @@
 name: build-kernel
 
-# 构建 FFI 内核插件的多平台产物：
-#   - Windows：zb_lite_kernel.dll / zb_example_kernel.dll
-#   - Linux：libzb_lite_kernel.so（附带 gcc 端到端自检）
-#   - Android：arm64-v8a / armeabi-v7a / x86_64 三个 ABI 的 .so
-# 最后统一打包为可安装的插件 zip（lite_kernel.zip / hello_ffi_kernel.zip）
-# 与独立内核包（.zbk）。
+# 内核构建：产出三种风味里 Gecko 版所需的内核包（.zbk），按平台/架构拆分：
+#   - Android：arm64-v8a / armeabi-v7a / x86 / x86_64（NDK 交叉编译）
+#   - Linux：x64（ubuntu-latest）/ arm64（ubuntu-24.04-arm 原生编译）
+#   - Windows：x64 / arm64（MSVC 交叉编译）
 #
-# 产物目录严格对应 example_plugins/*/manifest.json 中 kernel.libraries 的声明，
-# 打包脚本 tool/pack_plugin.py 会以插件目录为 zip 根，得到可直接安装的插件包。
-# 触发说明（这里有个容易踩的坑）：
-#   GitHub 在 `push` 下**同时**指定 `tags` 与 `paths` 时，两个过滤器是"与"关系 ——
-#   于是只写 `tags: ['v*']` + `paths` 会导致主干推送完全不触发（实测：推送
-#   `.github/workflows/build-kernel.yml` 到 main 后没有任何 run）。
-#   因此这里显式声明 `branches: [main]`：分支与标签之间是"或"，两者都要过 paths。
+# 说明：应用工作流（build-android-apk / build-linux / build-windows）在构建
+# Gecko 风味时会自行编译内核并随包内置；本工作流用于独立验证内核可编译、
+# 可打包，并保留手动下载内核包的能力。
+#
+# 触发说明：push 下 tags 与 paths 是「与」关系，因此显式声明 branches，
+# 让 main 推送与 tag 都能命中。
 on:
   workflow_dispatch:
   push:
@@ -23,43 +20,28 @@ on:
       - 'v*'
     paths:
       - 'native_kernels/**'
-      - 'example_plugins/lite_kernel/**'
-      - 'example_plugins/hello_ffi_kernel/**'
       - 'native_plugins/zb_native_surface/include/**'
-      - 'build_kernel_pkg/**'
-      - 'tool/build_lite_kernel.sh'
-      - 'tool/build_lite_kernel.bat'
-      - 'tool/pack_common.py'
-      - 'tool/pack_plugin.py'
+      - 'build_kernel_pkg/zb_gecko_kernel/**'
+      - 'tool/build_engine_kernels.py'
       - 'tool/pack_kernel.py'
-      - 'tool/assemble_kernel_pkg.py'
-      - 'tool/fetch_webview2_runtime.py'
-      - 'tool/assemble_chromium_kernel.py'
-      - 'docs/KERNEL_CHROMIUM.md'
       - '.github/workflows/build-kernel.yml'
   pull_request:
     paths:
       - 'native_kernels/**'
-      - 'example_plugins/lite_kernel/**'
-      - 'tool/build_lite_kernel.sh'
-      - 'tool/build_lite_kernel.bat'
-      - 'tool/pack_common.py'
-      - 'tool/assemble_kernel_pkg.py'
-      - 'tool/fetch_webview2_runtime.py'
-      - 'tool/assemble_chromium_kernel.py'
+      - 'native_plugins/zb_native_surface/include/**'
+      - 'build_kernel_pkg/zb_gecko_kernel/**'
+      - 'tool/build_engine_kernels.py'
+      - 'tool/pack_kernel.py'
       - '.github/workflows/build-kernel.yml'
 
 env:
   INCLUDE_DIR: native_plugins/zb_native_surface/include
   LITE_DIR: native_kernels/zb_lite_kernel
-  LITE_PLUGIN: example_plugins/lite_kernel
-  EXAMPLE_DIR: example_plugins/hello_ffi_kernel
-  EXAMPLE_SRC: example_plugins/hello_ffi_kernel/kernels/windows/zb_example_kernel.c
+  PKG: build_kernel_pkg/zb_gecko_kernel
 
 jobs:
   # ---------------------------------------------------------------
-  # 0) 端到端自检：用 gcc 编译内核 + 自检程序并运行
-  #    这是唯一能证明内核"真的能解析、排版、渲染"的验证手段。
+  # 0) 端到端自检：gcc 编译内核 + 自检程序，证明内核能解析、排版、渲染
   # ---------------------------------------------------------------
   selftest:
     name: Self-test (linux/gcc)
@@ -70,8 +52,6 @@ jobs:
       - name: Compile kernel + selftest
         run: |
           mkdir -p build
-          # 不加 -Werror：本地验证用的是 GCC 16，runner 上的 GCC 版本不同，
-          # 新版本可能引入新警告；这里把警告打出来但不阻断，真正闸门是自检本身。
           gcc -std=c99 -Wall -Wextra -O2 \
               -I "$INCLUDE_DIR" -I "$LITE_DIR/include" \
               "$LITE_DIR"/src/*.c \
@@ -79,87 +59,122 @@ jobs:
               -o build/lite_selftest
 
       - name: Run selftest
-        run: |
-          ./build/lite_selftest
-          echo "退出码 0 = 全部断言通过"
-
-      - name: Pedantic syntax check (header hygiene)
-        run: |
-          mkdir -p build/pedantic
-          for f in "$LITE_DIR"/src/*.c; do
-            gcc -std=c99 -pedantic -Wall -Wextra -O1 -c \
-                -I "$INCLUDE_DIR" -I "$LITE_DIR/include" \
-                "$f" -o "build/pedantic/$(basename "$f" .c).o"
-          done
-          echo "pedantic 语法检查通过"
+        run: ./build/lite_selftest
 
   # ---------------------------------------------------------------
-  # 0b) CMake 构建路径：独立 job，不阻塞产物构建。
-  #     本机开发环境没有 cmake，这条路径无法在本地验证，因此交给 CI；
-  #     单独成 job 是为了即使它失败，windows-dll / android-so / linux-so
-  #     仍能照常产出可安装的插件包。
+  # 1) Android：NDK 交叉编译四个 ABI
   # ---------------------------------------------------------------
-  cmake-build:
-    name: CMake path (linux)
+  android:
+    name: Android zbk (4 ABI)
     runs-on: ubuntu-latest
+    needs: [selftest]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show cmake version
-        run: cmake --version
-
-      - name: Configure
+      - name: Install NDK
         run: |
-          cmake -S "$LITE_DIR" -B build/lite-kernel \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DZB_LITE_BUILD_SELFTEST=ON
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
+          "$SDKMANAGER" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
-      - name: Build
-        run: cmake --build build/lite-kernel --parallel
+      - name: Build four ABIs
+        run: python3 tool/build_engine_kernels.py --platform android
 
-      - name: Run CMake-built selftest
-        run: ./build/lite-kernel/zb_lite_kernel_selftest
-
-      - name: Verify shared library exports
+      - name: Pack .zbk
         run: |
-          SO=build/lite-kernel/libzb_lite_kernel.so
-          test -f "$SO" || { echo "::error::CMake 未产出 $SO"; exit 1; }
-          COUNT=$(nm -D --defined-only "$SO" | grep -c ' T zb_')
-          echo "导出的 zb_* 符号数：$COUNT"
-          test "$COUNT" -ge 16 || { echo "::error::导出符号不足 16 个"; exit 1; }
+          set -euo pipefail
+          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-android.zbk
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('dist/zip-browser-kernel-gecko-android.zbk') as z:
+              names = z.namelist()
+              for abi in ('arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'):
+                  assert any(f'/android/{abi}/' in n for n in names), f'缺少 {abi}'
+              print('ABI 齐全：', len(names), '个条目')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zbk-gecko-android
+          path: dist/*.zbk
+          if-no-files-found: error
 
   # ---------------------------------------------------------------
-  # 1) Windows：用 MSVC 编译 .dll（windows-latest 自带 VS 构建工具）
+  # 2) Linux：原生架构编译
   # ---------------------------------------------------------------
-  windows-dll:
-    name: Windows DLLs
+  linux:
+    name: Linux zbk (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: [selftest]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build kernel
+        run: python3 tool/build_engine_kernels.py --platform linux
+
+      - name: Pack .zbk
+        run: |
+          set -euo pipefail
+          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk') as z:
+              names = z.namelist()
+              assert any(n.startswith('bin/linux/') for n in names), '缺少 linux 内核库'
+              print('条目数：', len(names))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zbk-gecko-linux-${{ matrix.arch }}
+          path: dist/*.zbk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------
+  # 3) Windows：MSVC 交叉编译 x64 / arm64
+  # ---------------------------------------------------------------
+  windows:
+    name: Windows zbk (${{ matrix.arch }})
     runs-on: windows-latest
     needs: [selftest]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            cmake_arch: x64
+          - arch: arm64
+            cmake_arch: ARM64
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
+          arch: ${{ matrix.arch }}
 
-      - name: Build zb_lite_kernel.dll
-        shell: cmd
-        run: tool\build_lite_kernel.bat
-
-      - name: Build zb_example_kernel.dll
-        shell: cmd
-        run: |
-          if not exist build\kernel-obj mkdir build\kernel-obj
-          cl /nologo /LD /O2 /D_CRT_SECURE_NO_WARNINGS ^
-             /I %INCLUDE_DIR% ^
-             %EXAMPLE_SRC% ^
-             /Fe:%EXAMPLE_DIR%\kernels\windows\zb_example_kernel.dll ^
-             /Fo:build\kernel-obj\
-
-      - name: Verify exported symbols
+      - name: Build kernel DLL
         shell: pwsh
         run: |
+          cmake -S "$env:LITE_DIR" -B build/kernel -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败：$LASTEXITCODE" }
+          cmake --build build/kernel --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw "内核编译失败：$LASTEXITCODE" }
+
+          $dll = Get-ChildItem -Recurse -Path build/kernel -Filter 'zb_lite_kernel.dll' |
+                 Select-Object -First 1
+          if (-not $dll) { throw '未找到 zb_lite_kernel.dll' }
+
           $required = @(
             'zb_abi_version','zb_kernel_create','zb_kernel_destroy',
             'zb_kernel_name','zb_kernel_version',
@@ -169,573 +184,22 @@ jobs:
             'zb_kernel_attach_surface','zb_kernel_tick',
             'zb_kernel_dispatch_from_host','zb_free_ptr'
           )
-          $dlls = @(
-            "$env:LITE_PLUGIN/kernels/windows/zb_lite_kernel.dll",
-            "$env:EXAMPLE_DIR/kernels/windows/zb_example_kernel.dll"
-          )
-          foreach ($dll in $dlls) {
-            if (-not (Test-Path $dll)) { throw "DLL 未生成: $dll" }
-            $text = (& dumpbin /nologo /exports $dll) -join "`n"
-            $missing = $required | Where-Object { $text -notmatch [regex]::Escape($_) }
-            if ($missing) { throw "$dll 缺少导出符号: $($missing -join ', ')" }
-            Get-Item $dll | ForEach-Object { "OK  $($_.Name)  $($_.Length) 字节  16/16 符号" }
-          }
+          $text = (& dumpbin /nologo /exports $dll.FullName) -join "`n"
+          $missing = $required | Where-Object { $text -notmatch [regex]::Escape($_) }
+          if ($missing) { throw "缺少导出符号：$($missing -join ', ')" }
 
-      - name: Upload DLLs
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-windows-dll
-          path: |
-            example_plugins/lite_kernel/kernels/windows/zb_lite_kernel.dll
-            example_plugins/hello_ffi_kernel/kernels/windows/zb_example_kernel.dll
-          if-no-files-found: error
+          New-Item -ItemType Directory -Force -Path "$env:PKG/bin/windows" | Out-Null
+          Copy-Item $dll.FullName "$env:PKG/bin/windows/zb_gecko_kernel.dll" -Force
 
-  # ---------------------------------------------------------------
-  # 2) Android：用 NDK 交叉编译三个 ABI 的 .so
-  # ---------------------------------------------------------------
-  android-so:
-    name: Android .so (${{ matrix.abi }})
-    runs-on: ubuntu-latest
-    needs: [selftest]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - abi: arm64-v8a
-            triple: aarch64-linux-android
-          - abi: armeabi-v7a
-            triple: armv7a-linux-androideabi
-          - abi: x86_64
-            triple: x86_64-linux-android
-    steps:
-      - uses: actions/checkout@v4
-
-      # ubuntu-latest 已预装 Android SDK（ANDROID_SDK_ROOT），直接用它自带的
-      # sdkmanager 安装 NDK 即可（android-actions/setup-android 在新版 runner 上会失败）。
-      - name: Install NDK
+      - name: Pack .zbk
+        shell: pwsh
         run: |
-          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
-          SDKMANAGER=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
-          "$SDKMANAGER" --install "ndk;28.2.13676358" > /dev/null
-          echo "ANDROID_NDK=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          ls "$SDK/ndk"
-
-      - name: Compile zb_lite_kernel (${{ matrix.abi }})
-        run: |
-          NDK="$ANDROID_NDK"
-          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.triple }}24-clang"
-          OUT="$LITE_PLUGIN/kernels/android/${{ matrix.abi }}"
-          mkdir -p "$OUT"
-          "$CC" -shared -fPIC -O2 -Wall -Wextra \
-                -I "$INCLUDE_DIR" -I "$LITE_DIR/include" \
-                "$LITE_DIR"/src/*.c \
-                -o "$OUT/libzb_lite_kernel.so"
-          file "$OUT/libzb_lite_kernel.so"
-
-      - name: Compile zb_example_kernel (${{ matrix.abi }})
-        run: |
-          NDK="$ANDROID_NDK"
-          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.triple }}24-clang"
-          OUT="$EXAMPLE_DIR/kernels/android/${{ matrix.abi }}"
-          mkdir -p "$OUT"
-          "$CC" -shared -fPIC -O2 -Wall -Wextra \
-                -I "$INCLUDE_DIR" \
-                "$EXAMPLE_SRC" \
-                -o "$OUT/libzb_example_kernel.so"
-          file "$OUT/libzb_example_kernel.so"
-
-      - name: Verify exported symbols
-        run: |
-          NDK="$ANDROID_NDK"
-          NM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
-          SO="$LITE_PLUGIN/kernels/android/${{ matrix.abi }}/libzb_lite_kernel.so"
-          COUNT=$("$NM" -D --defined-only "$SO" | grep -c ' T zb_' || true)
-          echo "导出的 zb_* 符号数：$COUNT"
-          if [ "$COUNT" -lt 16 ]; then
-            echo "::error::导出符号不足 16 个（实际 $COUNT）"
-            exit 1
-          fi
-
-      - name: Upload shared libraries
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-android-so-${{ matrix.abi }}
-          path: |
-            example_plugins/lite_kernel/kernels/android/${{ matrix.abi }}/libzb_lite_kernel.so
-            example_plugins/hello_ffi_kernel/kernels/android/${{ matrix.abi }}/libzb_example_kernel.so
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------
-  # 3) Linux .so（宿主在 Linux 上也能用插件内核）
-  # ---------------------------------------------------------------
-  linux-so:
-    name: Linux .so
-    runs-on: ubuntu-latest
-    needs: [selftest]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compile shared library
-        run: |
-          OUT="$LITE_PLUGIN/kernels/linux/x86_64"
-          mkdir -p "$OUT"
-          gcc -shared -fPIC -O2 -Wall -Wextra \
-              -I "$INCLUDE_DIR" -I "$LITE_DIR/include" \
-              "$LITE_DIR"/src/*.c \
-              -o "$OUT/libzb_lite_kernel.so"
-          file "$OUT/libzb_lite_kernel.so"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          python tool/pack_kernel.py "$env:PKG" "dist/zip-browser-kernel-gecko-windows-${{ matrix.arch }}.zbk"
+          if ($LASTEXITCODE -ne 0) { throw "打包失败：$LASTEXITCODE" }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kernel-linux-so
-          path: example_plugins/lite_kernel/kernels/linux/x86_64/libzb_lite_kernel.so
+          name: zbk-gecko-windows-${{ matrix.arch }}
+          path: dist/*.zbk
           if-no-files-found: error
-
-  # ---------------------------------------------------------------
-  # 3b) Chromium 固定版本内核包（zb_chromium_kernel.zbk）
-  #
-  #     这是唯一一个**不需要编译**、也不需要 needs 上游作业的内核包：原料是 NuGet 上
-  #     的 WebView2 Fixed Version 运行时，纯下载 + 装配 + 打包，因此与 runner 架构无关，
-  #     用 ubuntu-latest 最省。刻意不依赖 selftest/各平台作业：固定版本运行时包不该被
-  #     C 编译或 Android NDK 的波动拖累，上游失败时这里仍要能独立产出可诊断的日志。
-  #
-  #     体积提示：运行时约 174 MiB，产物约 150-200 MB。artifact 由 upload-artifact
-  #     自动 zip（默认 compression-level 6），所以这里只上传最终的 .zbk，解包出来的
-  #     runtime/ 目录不上传（需要时重新 fetch 即可，比多传 170 MiB 划算得多）。
-  #
-  #     --strict-runtime 是硬闸门：它会额外要求包内 runtime 总体积 ≥ 20 MiB，
-  #     从而挡住本地验证用的「桩 msedgewebview2.exe」混进正式产物。
-  # ---------------------------------------------------------------
-  chromium-kernel:
-    name: Chromium fixed-version kernel (.zbk)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # tool/verify_packages.dart 需要 Dart；用与 build-android-apk 相同的 Flutter 版本，
-      # 避免 dart 工具链版本与 pubspec 约束漂移。
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.6
-          channel: stable
-          cache: true
-
-      - name: Show python / dart versions
-        run: |
-          python3 --version
-          dart --version
-
-      # 先只发现不下载：万一 NuGet 改名/限流，这一步的日志就能直接看出是哪一环有问题
-      # （脚本会打印 10 个候选 id 的探测结果、命中的包、版本、直链与体积）。
-      - name: Discover WebView2 fixed-version runtime
-        run: python3 tool/fetch_webview2_runtime.py --out "$RUNNER_TEMP/wv2" --arch x64 --dry-run
-
-      - name: Fetch WebView2 fixed-version runtime
-        run: python3 tool/fetch_webview2_runtime.py --out "$RUNNER_TEMP/wv2" --arch x64
-
-      - name: Assemble kernel package
-        run: |
-          python3 tool/assemble_chromium_kernel.py --runtime "$RUNNER_TEMP/wv2"
-          echo "::group::装配后的包目录"
-          find build_kernel_pkg/zb_chromium_kernel -maxdepth 1 | sort
-          du -sh build_kernel_pkg/zb_chromium_kernel/runtime
-          echo "::endgroup::"
-
-      - name: Pack .zbk
-        run: python3 tool/pack_kernel.py build_kernel_pkg/zb_chromium_kernel zb_chromium_kernel.zbk
-
-      - name: Verify with the host installer (strict runtime)
-        run: |
-          ls -l zb_chromium_kernel.zbk
-          size=$(stat -c%s zb_chromium_kernel.zbk)
-          echo "zbk 体积：$size 字节"
-          if [ "$size" -lt 20000000 ]; then
-            echo "::error::.zbk 只有 $size 字节，运行时显然没被装进去（预期 100MB 级）"
-            exit 1
-          fi
-          dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
-
-      - name: Upload chromium kernel package
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-chromium-zbk
-          path: zb_chromium_kernel.zbk
-          if-no-files-found: error
-
-  # 3c) Gecko 渲染内核包（zb_gecko_kernel.zbk）
-  #
-  #     与 chromium-kernel 类似，不依赖 C 编译上游：跨平台 FFI 渲染库
-  #     （bin/，由 native_kernels/zb_engine_kernel 同源编译）随仓库入库，
-  #     本作业直接打包 + 用宿主安装器校验 + 上传。
-  #     --require-platforms 会逐一核对 Windows / Linux / Android 三平台
-  #     库文件真实存在，防止清单声明了、包里却没有。
-  # ---------------------------------------------------------------
-  gecko-kernel:
-    name: Gecko rendering kernel (.zbk)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.6
-          channel: stable
-          cache: true
-
-      - name: Pack .zbk
-        run: python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel zb_gecko_kernel.zbk
-
-      - name: Verify with the host installer (require all platforms)
-        run: |
-          ls -l zb_gecko_kernel.zbk
-          dart run tool/verify_packages.dart --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 zb_gecko_kernel.zbk
-
-      - name: Upload gecko kernel package
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-gecko-zbk
-          path: zb_gecko_kernel.zbk
-          if-no-files-found: error
-
-  # 3d) 平台拆分包：每个内核按平台拆成独立 .zbk（按需下载，体积更小）。
-  #
-  #     zb_lite_kernel / zb_gecko_kernel：windows + linux + android 三包
-  #     zb_chromium_kernel：linux + android 两包（windows 用完整包，内含
-  #       WebView2 Fixed Version 运行时，拆包意义不大）。
-  #     需要上游编译产物归位 lite 内核的 bin/（gecko / chromium 库已随仓库入库）。
-  # ---------------------------------------------------------------
-  platform-split:
-    name: Platform-split kernel packages
-    runs-on: ubuntu-latest
-    needs: [windows-dll, android-so, linux-so]
-    # 标签推送时要把拆分包挂到 release 上，需要写权限（GITHUB_TOKEN 默认为只读）
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      # verify 步骤要用 `dart run tool/verify_packages.dart`
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.6
-          channel: stable
-          cache: true
-
-      - name: Download kernel build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: kernel-windows-dll
-          merge-multiple: false
-
-      - name: Download linux/Android .so artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: kernel-linux-so
-          merge-multiple: false
-
-      - name: Download Android .so artifacts (all ABIs)
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: kernel-android-so-*
-          merge-multiple: false
-
-      - name: Assemble lite kernel bin (for split)
-        run: |
-          set -euo pipefail
-          copy_from() {
-            local src
-            src="$(find "$1" -type f -name "$2" -print -quit)"
-            if [ -z "$src" ]; then echo "::error::在 $1 中找不到 $2"; exit 1; fi
-            mkdir -p "$3"
-            cp "$src" "$3/"
-          }
-          BASE=build_kernel_pkg/zb_lite_kernel/bin
-          copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$BASE/windows"
-          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$BASE/linux/x86_64"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$BASE/android/$abi"
-          done
-          find "$BASE" -type f | sort
-
-      - name: Pack platform-split kernel packages
-        run: |
-          set -euo pipefail
-          mkdir -p dist/split
-          # 双平台/全平台内核：三平台全拆
-          for pkg in zb_lite_kernel zb_gecko_kernel; do
-            for plat in windows linux android; do
-              python3 tool/pack_kernel.py "build_kernel_pkg/$pkg" \
-                "dist/split/$pkg-$plat.zbk" --platforms "$plat"
-            done
-          done
-          # Chromium：拆 linux / android（windows 用完整包）
-          for plat in linux android; do
-            python3 tool/pack_kernel.py build_kernel_pkg/zb_chromium_kernel \
-              "dist/split/zb_chromium_kernel-$plat.zbk" --platforms "$plat"
-          done
-          ls -lh dist/split
-
-      - name: Verify split packages
-        run: |
-          set -euo pipefail
-          for pkg in zb_lite_kernel zb_gecko_kernel; do
-            dart run tool/verify_packages.dart \
-              --require-platforms windows dist/split/$pkg-windows.zbk
-            dart run tool/verify_packages.dart \
-              --require-platforms linux dist/split/$pkg-linux.zbk
-            dart run tool/verify_packages.dart \
-              --require-platforms android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
-              dist/split/$pkg-android.zbk
-          done
-          dart run tool/verify_packages.dart \
-            --require-platforms linux dist/split/zb_chromium_kernel-linux.zbk
-          dart run tool/verify_packages.dart \
-            --require-platforms android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
-            dist/split/zb_chromium_kernel-android.zbk
-          echo "全部拆分包校验通过"
-
-      - name: Upload platform-split packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-platform-split
-          path: dist/split/*.zbk
-          if-no-files-found: error
-
-      # 打 v* tag 时把拆分包挂到 Release。
-      - name: Attach split packages to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/split/*.zbk
-          fail_on_unmatched_files: false
-
-  # ---------------------------------------------------------------
-  # 4) 汇总：把各平台产物放回 manifest 声明的路径，再打包成插件 zip / .zbk
-  # ---------------------------------------------------------------
-  package:
-    name: Package plugin zips
-    runs-on: ubuntu-latest
-    needs: [windows-dll, android-so, linux-so, chromium-kernel, gecko-kernel]
-    # 标签推送时要把包挂到 release 上，需要写权限（GITHUB_TOKEN 默认为只读）
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      # 本作业要用 `dart run tool/verify_packages.dart` 逐个校验打好的包。
-      # ubuntu-latest 上**没有**预装 dart，缺了它这一步会以 127（command not found）
-      # 直接失败（v0.7.0 的第一次运行就是这么挂的）。显式装 Flutter 才能拿到 dart。
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.6
-          channel: stable
-          cache: true
-
-      - name: Download all kernel artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          # 汇总作业已经被 needs 保证在 chromium-kernel 之后运行，但产物名写错/被改名时
-          # 不该让整个打包作业倒在这里；缺了就在下面单列一条警告，并明确列出少了什么。
-          pattern: kernel-*
-          merge-multiple: false
-
-      - name: Assemble plugin directories
-        run: |
-          set -euo pipefail
-
-          echo "::group::下载到的产物布局"
-          find dist -type f | sort
-          echo "::endgroup::"
-
-          # 内核包里体积最大、也最容易被上游悄悄弄丢的就是 Chromium 固定版本内核包：
-          # 单独把它的落点和体积打出来，失败时一眼能看出是"产物没上传"还是"上传了但空"。
-          CHROMIUM_ZBK="$(find dist/kernel-chromium-zbk -type f -name '*.zbk' -print -quit 2>/dev/null || true)"
-          if [ -n "$CHROMIUM_ZBK" ]; then
-            echo "Chromium 固定版本内核包：$CHROMIUM_ZBK（$(stat -c%s "$CHROMIUM_ZBK") 字节）"
-          else
-            echo "::warning::没有拿到 kernel-chromium-zbk 产物，release 将缺少 zb_chromium_kernel.zbk"
-          fi
-
-          # 注意：upload-artifact@v4 对多路径上传会保留「相对于最小公共父目录」的
-          # 路径（例如 lite_kernel/kernels/windows/zb_lite_kernel.dll），
-          # 所以这里不写死产物内部结构，只按「产物目录 + 文件名」定位。
-          copy_from() {  # $1=产物目录 $2=文件名 $3=目标目录
-            local src
-            src="$(find "$1" -type f -name "$2" -print -quit)"
-            if [ -z "$src" ]; then
-              echo "::error::在 $1 中找不到 $2"
-              exit 1
-            fi
-            mkdir -p "$3"
-            cp "$src" "$3/"
-            echo "  $src -> $3/"
-          }
-
-          copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$LITE_PLUGIN/kernels/windows"
-          copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$LITE_PLUGIN/kernels/linux/x86_64"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$LITE_PLUGIN/kernels/android/$abi"
-          done
-
-          copy_from dist/kernel-windows-dll zb_example_kernel.dll "$EXAMPLE_DIR/kernels/windows"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            copy_from "dist/kernel-android-so-$abi" libzb_example_kernel.so "$EXAMPLE_DIR/kernels/android/$abi"
-          done
-
-          # 独立内核包（.zbk）：kernel.json 里声明了 5 个平台的库，
-          # 所以必须把 5 个平台全部装进去，否则包内清单会声明不存在的文件。
-          ZBK_DIR=build_kernel_pkg/zb_lite_kernel
-          if [ -f "$ZBK_DIR/kernel.json" ]; then
-            rm -rf "$ZBK_DIR/bin"
-            copy_from dist/kernel-windows-dll zb_lite_kernel.dll "$ZBK_DIR/bin/windows"
-            copy_from dist/kernel-linux-so   libzb_lite_kernel.so "$ZBK_DIR/bin/linux/x86_64"
-            for abi in arm64-v8a armeabi-v7a x86_64; do
-              copy_from "dist/kernel-android-so-$abi" libzb_lite_kernel.so "$ZBK_DIR/bin/android/$abi"
-            done
-          fi
-
-          echo "::group::装配后的插件内核目录"
-          find "$LITE_PLUGIN/kernels" "$EXAMPLE_DIR/kernels" -type f | sort
-          echo "::endgroup::"
-          if [ -d "$ZBK_DIR/bin" ]; then
-            echo "::group::装配后的独立内核包目录"
-            find "$ZBK_DIR" -type f | sort
-            echo "::endgroup::"
-          fi
-
-      - name: Validate manifest paths
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-
-          def check(root):
-              m = json.load(open(os.path.join(root, "manifest.json"), encoding="utf-8"))
-              libs = m["kernel"]["libraries"]
-              wanted = []
-              if isinstance(libs.get("windows"), str):
-                  wanted.append(libs["windows"])
-              if isinstance(libs.get("linux"), str):
-                  wanted.append(libs["linux"])
-              android = libs.get("android")
-              if isinstance(android, dict):
-                  wanted.extend(android.values())
-              missing = [p for p in wanted if not os.path.isfile(os.path.join(root, p))]
-              if missing:
-                  raise SystemExit(f"{root}: manifest 声明的文件缺失: {missing}")
-              print(f"{root}: manifest 校验通过（{len(wanted)} 个库文件）")
-
-          check("example_plugins/lite_kernel")
-          check("example_plugins/hello_ffi_kernel")
-
-          # 独立内核包同样要校验：kernel.json 声明了几个平台，
-          # 包里就必须有几个平台的库文件（这里曾经漏打包 linux/android）。
-          ZBK_DIR = "build_kernel_pkg/zb_lite_kernel"
-          if os.path.isfile(os.path.join(ZBK_DIR, "kernel.json")):
-              m = json.load(open(os.path.join(ZBK_DIR, "kernel.json"), encoding="utf-8"))
-              libs = m["libraries"]
-              wanted = []
-              if isinstance(libs.get("windows"), str):
-                  wanted.append(libs["windows"])
-              if isinstance(libs.get("linux"), str):
-                  wanted.append(libs["linux"])
-              android = libs.get("android")
-              if isinstance(android, dict):
-                  wanted.extend(android.values())
-              missing = [q for q in wanted if not os.path.isfile(os.path.join(ZBK_DIR, q))]
-              if missing:
-                  raise SystemExit(f"{ZBK_DIR}: kernel.json 声明的文件缺失: {missing}")
-              print(f"{ZBK_DIR}: kernel.json 校验通过（{len(wanted)} 个库文件）")
-          PY
-
-      - name: Pack plugin zips
-        run: |
-          python3 tool/pack_plugin.py "$LITE_PLUGIN" lite_kernel.zip
-          python3 tool/pack_plugin.py "$EXAMPLE_DIR" hello_ffi_kernel.zip
-
-      - name: Pack standalone kernel package (.zbk)
-        run: |
-          if [ -f build_kernel_pkg/zb_lite_kernel/kernel.json ]; then
-            python3 tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zb_lite_kernel.zbk
-          else
-            echo "未找到 build_kernel_pkg/zb_lite_kernel，跳过"
-          fi
-
-          # 把上游产出的 Chromium 固定版本内核包搬到工作区根目录：release 步骤用的是
-          # `*.zbk` 通配符，只有落在根目录且名字以 .zbk 结尾才会被挂上去。
-          CHROMIUM_ZBK="$(find dist/kernel-chromium-zbk -type f -name 'zb_chromium_kernel.zbk' -print -quit 2>/dev/null || true)"
-          if [ -z "$CHROMIUM_ZBK" ]; then
-            # 本作业 needs 了 chromium-kernel，正常路径下一定拿得到；
-            # 拿不到就说明产物名/上传环节被改坏了，必须硬失败 ——
-            # 否则 release 会静默少一个内核包（本仓库踩过「清单声明了、包里却没有」的坑）。
-            echo "::error::dist 里没有 zb_chromium_kernel.zbk，release 会缺少 Chromium 内核包"
-            exit 1
-          fi
-          cp "$CHROMIUM_ZBK" zb_chromium_kernel.zbk
-          echo "已就位：zb_chromium_kernel.zbk（$(stat -c%s zb_chromium_kernel.zbk) 字节）"
-
-      # Gecko 渲染内核包：ffi 类型，携带 Windows / Linux / Android 三平台渲染库
-      # （bin/ 已入库，由 native_kernels/zb_engine_kernel 同源编译），打包不依赖
-      # 上游编译产物，必须能稳定产出。
-      - name: Pack gecko rendering kernel (.zbk)
-        run: |
-          test -f build_kernel_pkg/zb_gecko_kernel/kernel.json || {
-            echo "::error::缺少 build_kernel_pkg/zb_gecko_kernel/kernel.json"; exit 1; }
-          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel zb_gecko_kernel.zbk
-          ls -l zb_gecko_kernel.zbk
-
-      # 用宿主自己的安装器逐个校验内核包。tool/verify_packages.dart 已按内核类型分派：
-      #   - ffi 内核：逐个核对清单声明的平台/ABI 库文件是否真实存在；
-      #   - webview2_fixed：强制 runtime_dir 内必须有 msedgewebview2.exe。
-      # 显式写平台断言而不是依赖脚本内部的默认期望值：包是"声明了什么就必须有什么"，
-      # 这里把 lite 内核应有的 5 个平台/ABI 明写出来，清单少填一个平台也不会蒙混过关。
-      - name: Verify lite kernel package (5 platforms)
-        run: |
-          dart run tool/verify_packages.dart \
-            --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
-            zb_lite_kernel.zbk
-
-      # --strict-runtime 会额外要求运行时 ≥ 20 MiB：这是挡住"桩运行时"混进 release 的闸门。
-      # 不加 if 守卫：上一步已保证文件就位，缺文件就该失败，不能静默跳过。
-      - name: Verify chromium kernel package (strict runtime)
-        run: dart run tool/verify_packages.dart --strict-runtime zb_chromium_kernel.zbk
-
-      # Gecko 渲染内核：ffi 类型，断言 Windows / Linux / Android 全平台库就位。
-      - name: Verify gecko rendering kernel
-        run: |
-          dart run tool/verify_packages.dart \
-            --require-platforms windows,linux,android/arm64-v8a,android/armeabi-v7a,android/x86_64 \
-            zb_gecko_kernel.zbk
-
-      - name: Upload plugin packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-plugin-packages
-          path: |
-            lite_kernel.zip
-            hello_ffi_kernel.zip
-            *.zbk
-          if-no-files-found: error
-
-      # 标签推送（v*）时把完整的多平台包挂到 release 上。
-      # 不设置 generate_release_notes：发布说明由 build-windows 那边生成或人工撰写，
-      # 这里只补文件，避免把人工写的说明覆盖成自动生成的内容。
-      #
-      # 逐个列名而不是只写 `*.zbk`：一是让"本作业负责哪 5 个包"一眼可见，
-      # 二是显式列出 zb_chromium_kernel.zbk（Chromium 固定版本内核，约 100MB）
-      # 与 zb_gecko_kernel.zbk（Gecko 引擎适配包，几十 KB）；
-      # fail_on_unmatched_files: false 保证某个包没产出时其余包照常发布。
-      - name: Attach packages to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            lite_kernel.zip
-            hello_ffi_kernel.zip
-            zb_lite_kernel.zbk
-            zb_chromium_kernel.zbk
-            zb_gecko_kernel.zbk
-          fail_on_unmatched_files: false

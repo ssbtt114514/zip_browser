@@ -28,7 +28,7 @@ minSdk 已由 `tool/patch_android_gradle.py` 钉死为 21，防止模板默认�
 
 ## 老设备可用的替代路线
 
-- **Android 5.0 – 7.1**：完整版可用；系统 WebView 由 Chrome 更新到 2021 前后
+- **Android 5.0 – 7.1**：Chromium 风味可用；系统 WebView 由 Chrome 更新到 2021 前后
   的版本，多数网站可正常浏览。
 - **无内核版（ZIP_FLAVOR=none）**：同样受 Flutter 引擎 minSdk 21 约束，
   无法运行在 Android 4.x —— 该风味解决的是「分发体积 / 能力裁剪」，

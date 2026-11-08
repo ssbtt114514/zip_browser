@@ -52,10 +52,11 @@ ENGINES = [
     },
 ]
 
-ANDROID_ABIS = ["arm64-v8a", "armeabi-v7a", "x86_64"]
+ANDROID_ABIS = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
 NDK_TRIPLES = {
     "arm64-v8a": "aarch64-linux-android24",
     "armeabi-v7a": "armv7a-linux-androideabi24",
+    "x86": "i686-linux-android24",
     "x86_64": "x86_64-linux-android24",
 }
 

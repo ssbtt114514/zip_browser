@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/build_flavor.dart';
 import '../../core/constants.dart';
 import '../../core/kernel/kernel_registry.dart';
 import '../../core/kernel/kernel_types.dart';
@@ -17,7 +16,6 @@ import 'appearance_page.dart';
 import 'desktop_mode_page.dart';
 import 'devtools_page.dart';
 import 'home_settings_page.dart';
-import 'kernels_page.dart';
 import 'reading_page.dart';
 import 'search_engines_page.dart';
 import 'update_dialog.dart';
@@ -171,22 +169,6 @@ class SettingsPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                const Divider(height: 1, indent: 56),
-                if (BuildFlavorInfo.kernelManagementEnabled)
-                  _NavTile(
-                    icon: Icons.memory_outlined,
-                    title: '内核管理',
-                    subtitle: '安装 / 切换 / 卸载独立内核包',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const KernelsPage()),
-                    ),
-                  ),
-                if (!BuildFlavorInfo.kernelManagementEnabled)
-                  const ListTile(
-                    dense: true,
-                    title: Text('当前为单内核构建：仅使用系统内核',
-                        style: TextStyle(fontSize: 12)),
                   ),
               ],
             ),

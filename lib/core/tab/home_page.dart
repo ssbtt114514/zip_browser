@@ -31,7 +31,7 @@ class HomePage {
     final hasQuery = searchEngineTemplate.contains('?');
     final base = qIndex >= 0
         ? searchEngineTemplate.substring(0, qIndex)
-        : '${searchEngineTemplate}${hasQuery ? '&' : '?'}q=';
+        : '$searchEngineTemplate${hasQuery ? '&' : '?'}q=';
     final suffix = qIndex >= 0 ? searchEngineTemplate.substring(qIndex + 3) : '';
 
     final accentHex = _colorToHex(accentColor ?? const Color(0xFF0B84A5));
@@ -319,7 +319,7 @@ class HomePage {
       按 <kbd>Ctrl</kbd>+<kbd>T</kbd> 新建标签 ·
       <kbd>Ctrl</kbd>+<kbd>L</kbd> 聚焦地址栏 ·
       <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> 恢复关闭的标签<br>
-      可安装独立内核包（.zbk），在「内核管理」中切换或卸载
+      当前内核随安装包内置，可在「设置 → 浏览器内核」查看
     </footer>
   </div>
 <script>
@@ -335,14 +335,14 @@ class HomePage {
     if (/^(https?|ftp|file|data|about|blob|ws|wss):/i.test(t)) return true;
     if (/^\\/\\//.test(t)) return true;
     if (/\\s/.test(t)) return false;
-    if (/^localhost(:\\d{1,5})?([\\/?#].*)?$/i.test(t)) return true;
+    if (/^localhost(:\\d{1,5})?([\\/?#].*)?\$/i.test(t)) return true;
     if (isIp(t)) return true;
-    return /^([a-zA-Z0-9_\\u4e00-\\u9fa5-]+\\.)+[a-zA-Z\\u4e00-\\u9fa5]{2,}(:\\d{1,5})?([\\/?#].*)?$/.test(t);
+    return /^([a-zA-Z0-9_\\u4e00-\\u9fa5-]+\\.)+[a-zA-Z\\u4e00-\\u9fa5]{2,}(:\\d{1,5})?([\\/?#].*)?\$/.test(t);
   }
 
   // IPv4：四段且每段 0-255（999.1.1.1 不当作地址）
   function isIp(t) {
-    var m = /^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(:\\d{1,5})?([\\/?#].*)?$/.exec(t);
+    var m = /^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(:\\d{1,5})?([\\/?#].*)?\$/.exec(t);
     if (!m) return false;
     for (var i = 1; i <= 4; i++) {
       if (parseInt(m[i], 10) > 255) return false;
@@ -351,12 +351,12 @@ class HomePage {
   }
 
   function isLocal(t) {
-    return /^localhost(:\\d{1,5})?([\\/?#].*)?$/i.test(t) || isIp(t);
+    return /^localhost(:\\d{1,5})?([\\/?#].*)?\$/i.test(t) || isIp(t);
   }
 
   // 去掉句末中英文标点后再补全 scheme
   function open(t) {
-    t = t.replace(/[。，、！？；：,.!?;:]+$/, '');
+    t = t.replace(/[。，、！？；：,.!?;:]+\$/, '');
     if (/^[a-z][a-z0-9+.\\-]*:/i.test(t)) { location.href = t; return; }
     if (t.indexOf('//') === 0) { location.href = 'https:' + t; return; }
     if (isLocal(t)) { location.href = 'http://' + t; return; }

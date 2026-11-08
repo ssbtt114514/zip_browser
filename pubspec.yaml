@@ -1,7 +1,7 @@
 name: zip_browser
 description: "可通过独立内核包扩展浏览器内核的多平台浏览器框架（Android / Windows / Linux，后续 macOS）"
 publish_to: "none"
-version: 0.12.0+17
+version: 0.12.1+18
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -55,6 +55,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # —— 随包内置内核（仅 Gecko 风味由 CI 写入 kernel.zbk）——
+  assets:
+    - assets/bundled/
 
   # —— 内置字体：OPPO Sans（OPPO 官方免费商用授权）——
   fonts:

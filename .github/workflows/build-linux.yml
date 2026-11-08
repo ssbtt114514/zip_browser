@@ -2,8 +2,10 @@ name: build-linux
 
 # 构建 Linux 桌面版并打包：x64（ubuntu-latest）与 arm64/aarch64（ubuntu-24.04-arm
 # 原生 ARM 运行器）两个架构，每个架构各产出三种构建风味
-# （full=完整版 / single=单内核版 / none=无内核版，--dart-define=ZIP_FLAVOR=...），
-# 每份产物包含 tar.gz 与 .deb 安装包。
+# （none=无内核版 / chromium=Chromium 内核版 / gecko=Gecko 内核版，
+# --dart-define=ZIP_FLAVOR=...），每份产物包含 tar.gz 与 .deb 安装包。
+# Gecko 风味在构建机上用 gcc 编译本架构内核并随包内置；Chromium 风味
+# 使用系统 WebKitGTK。
 # Flutter 不支持交叉编译桌面版：Linux 产物只能在同架构 Linux 主机上构建，
 # 因此用 GitHub 的 amd64 / arm64 原生运行器分别构建。
 #
@@ -84,14 +86,14 @@ jobs:
             arch: amd64
             runner: ubuntu-latest
             flutter_version: 3.47.6
-            flavor: full
-            suffix: ''
+            flavor: chromium
+            suffix: '-chromium'
           - label: x64
             arch: amd64
             runner: ubuntu-latest
             flutter_version: 3.47.6
-            flavor: single
-            suffix: '-single'
+            flavor: gecko
+            suffix: '-gecko'
           - label: x64
             arch: amd64
             runner: ubuntu-latest
@@ -104,14 +106,14 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
             flutter_version: ''
-            flavor: full
-            suffix: ''
+            flavor: chromium
+            suffix: '-chromium'
           - label: aarch64
             arch: arm64
             runner: ubuntu-24.04-arm
             flutter_version: ''
-            flavor: single
-            suffix: '-single'
+            flavor: gecko
+            suffix: '-gecko'
           - label: aarch64
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -154,6 +156,23 @@ jobs:
 
       - name: Remove template widget test
         run: rm -f test/widget_test.dart
+
+      # Gecko 风味：用本机 gcc 编译本架构内核，装配成 .zbk 后作为资产内置
+      - name: Build bundled Gecko kernel
+        if: matrix.flavor == 'gecko'
+        run: |
+          set -euo pipefail
+          python3 tool/build_engine_kernels.py --platform linux
+          mkdir -p assets/bundled
+          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('assets/bundled/kernel.zbk') as z:
+              names = z.namelist()
+              assert any(n.endswith('kernel.json') for n in names), '缺少 kernel.json'
+              assert any(n.startswith('bin/linux/') for n in names), '缺少 linux 内核库'
+              print('内置内核包条目：', len(names))
+          PY
 
       - name: Resolve dependencies
         run: flutter pub get

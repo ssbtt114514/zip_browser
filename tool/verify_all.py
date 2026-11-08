@@ -46,6 +46,7 @@ PATH_CHECK_SKIP = (
     "test/widget_test.dart",
     "/lib/arm64-v8a/",
     "/lib/armeabi-v7a/",
+    "/lib/x86/",
     "/lib/x86_64/",
     "/lib/libflutter",
 )

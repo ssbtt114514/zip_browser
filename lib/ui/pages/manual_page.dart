@@ -94,7 +94,7 @@ class ManualPage extends StatelessWidget {
             icon: Icons.memory_outlined,
             title: '内核',
             lines: [
-              '内核管理：安装 .zbk 独立内核包，并在系统内核 / 独立内核间切换。',
+              '构建风味：无内核版 / Chromium 版 / Gecko 版，内核随安装包内置。',
               '仓库自带「轻量文本内核」示例：真实抓取网页、解析 HTML、软件渲染上屏。',
               '内核 ABI 与内核包制作见仓库 docs/ 目录。',
             ],

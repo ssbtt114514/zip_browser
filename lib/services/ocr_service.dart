@@ -43,7 +43,7 @@ class OcrService {
   /// Android 内置识别：ML Kit 中文脚本，失败时回落拉丁脚本
   /// （纯英文图片在中文识别器下偶发漏识别）。
   static Future<String> _mlKitRecognize(String path) async {
-    final inputImage = await InputImage.fromFilePath(path);
+    final inputImage = InputImage.fromFilePath(path);
     String text;
     try {
       final recognizer =

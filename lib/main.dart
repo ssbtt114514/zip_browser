@@ -12,6 +12,7 @@ import 'core/tab/tab_manager.dart';
 import 'core/script/userscript_manager.dart';
 import 'core/theme/appearance_settings.dart';
 import 'core/theme/theme_engine.dart';
+import 'services/bundled_kernel_seeder.dart';
 import 'services/bookmarks_service.dart';
 import 'services/config_service.dart';
 import 'services/desktop_mode_config.dart';
@@ -122,9 +123,12 @@ Future<void> _runApp() async {
   final userscriptManager =
       UserscriptManager(scriptsDir: AppPaths.userscriptsDir);
 
-  // 5. 独立内核包管理器（扫描已安装的 .zbk 内核包）
+  // 5. 内核包管理器（扫描已安装的 .zbk 内核包）
   final kernelManager = KernelManager(kernelsDir: AppPaths.kernelsDir)
     ..loadAll();
+
+  // 5a. 内置内核：Gecko 风味首次启动时安装并选中随包内核
+  await seedBundledKernel(kernelManager: kernelManager, config: config);
 
   // 5b. 内核注册表（系统内核 + 独立内核包 + 插件携带内核）
   final kernelRegistry = KernelRegistry(

@@ -144,19 +144,28 @@ registerBridgeHandler
   - Android：系统 **Android System WebView**
     （`com.google.android.webview`，由系统统一更新）
   - Windows：**WebView2 Evergreen Runtime**（Edge Chromium，系统组件）
+  - Linux：**WebKitGTK 4.1**（系统组件）
 - **plugin（插件内核）**
   - Windows：插件 zip 携带的 **WebView2 Fixed Version** 固定版本运行时
     （`browserExecutableFolder`），或任意遵循 C ABI 的第三方内核（`.dll`）
   - Android：插件携带的 `.so` 内核（实验性，需 JNI/EGL 表面桥）
+- **standalone（独立内核包）**：`.zbk` 随安装包内置（Gecko 风味），
+  首次启动由 `seedBundledKernel()` 安装并选中
 
 ### 内核选择 `KernelRegistry`
 
-1. `SettingsPage` 中选择内核，id 持久化在 `ConfigService`。
+1. 构建风味决定内核来源（`--dart-define=ZIP_FLAVOR=none|chromium|gecko`）：
+   - `none` → `StubKernel`，不加载网页
+   - `chromium` → 平台系统内核（Android WebView / Windows WebView2 /
+     Linux WebKitGTK）
+   - `gecko` → 随包 `.zbk` 内置内核（首次启动自动安装并选中），
+     安装失败回落系统内核
 2. 每个新标签页 `createKernel(tabId)`：
-   - 未选择 → 平台默认系统内核
-   - `plugin.<id>` → 插件 Fixed Runtime 或 FFI 内核；加载失败自动回退系统内核
-3. 切换内核**只影响新标签页**（WebView2 环境为进程级，切换 Fixed Version
-   需重启应用，UI 会提示）。
+   - gecko 风味读取 `ConfigService.selectedKernelId`，`kernel.<id>` 走
+     FFI / Fixed Runtime / 引擎适配包
+   - 其余风味固定系统内核，忽略历史选择
+   - 内核包被删除或损坏时回退系统内核，避免开标签页失败
+3. 设置页仍展示已安装内核与当前生效内核，供排查问题。
 
 ---
 
@@ -274,9 +283,9 @@ window.zipBrowser.on('event', data => ...)
 
 | 平台 | 系统内核 | 承载插件 | 插件内核 | 状态 |
 |------|----------|----------|----------|------|
-| Android | Android System WebView | `webview_flutter` | `.so`（实验） | ✅ |
-| Windows | WebView2 (Edge Chromium) | `webview_windows` | Fixed Version / `.dll` | ✅ |
-| Linux | 规划（WebKitGTK / CEF） | 待定 | `.so` | 🚧 占位 |
+| Android | Android System WebView | `webview_flutter` | `.zbk`（随包内置） | ✅ 4 ABI |
+| Windows | WebView2 (Edge Chromium) | `webview_windows` | `.zbk`（随包内置） | ✅ x64 / arm64 |
+| Linux | WebKitGTK 4.1 | `media_kit` 等 | `.zbk`（随包内置） | ✅ x64 / arm64 |
 | macOS | 规划（WKWebView / CEF） | 待定 | `.dylib` | 🚧 占位 |
 
 > Android 端“浏览器内核调用系统的 Android System WebView”——
@@ -284,7 +293,10 @@ window.zipBrowser.on('event', data => ...)
 > 不打包任何内核，随系统组件更新。
 >
 > Windows 端使用 WebView2：Evergreen 为系统运行时；
-> Fixed Version 可由插件 zip 携带，实现“内核在插件里”且版本完全可控。
+> gecko 风味随包内置 `.zbk` 内核，安装后固定版本、不再依赖系统组件。
+>
+> 应用包只产 Flutter 官方支持的架构：Android 四 ABI（含 x86），
+> Windows / Linux 仅 x64 与 arm64；内核原生库仍按四 Android ABI 编译。
 
 ---
 

@@ -22,6 +22,7 @@
     "android": {
       "arm64-v8a": "bin/android/arm64-v8a/libzb_chromium_kernel.so",
       "armeabi-v7a": "bin/android/armeabi-v7a/libzb_chromium_kernel.so",
+      "x86": "bin/android/x86/libzb_chromium_kernel.so",
       "x86_64": "bin/android/x86_64/libzb_chromium_kernel.so"
     }
   },

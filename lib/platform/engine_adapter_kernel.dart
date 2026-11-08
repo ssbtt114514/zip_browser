@@ -540,7 +540,7 @@ class EngineRuntimeLocator {
 /// 它做三件事：
 /// 1. 探测本机是否存在目标引擎（Gecko）的运行时文件，并把候选路径与命中情况
 ///    全部展示出来；
-/// 2. 提供与其它内核一致的 [BrowserKernel] 接口，使「内核管理」可以选中它、
+/// 2. 提供与其它内核一致的 [BrowserKernel] 接口，使设置页可以选中它、
 ///    标签页可以正常创建；
 /// 3. 在视图里明确说明为什么不渲染、以及要真正渲染需要什么。
 ///
@@ -774,7 +774,7 @@ class _EngineAdapterView extends StatelessWidget {
             _sectionTitle('要真正渲染网页，需要什么'),
             const SizedBox(height: 6),
             const Text(
-              '· 想现在就上网：在「内核管理」里切回系统内核（Windows WebView2 / '
+              '· 想现在就上网：在「设置 → 浏览器内核」里切回系统内核（Windows WebView2 / '
               'Linux WebKitGTK / Android System WebView），或安装携带 FFI 原生库、'
               'WebView2 固定版本运行时的内核包。',
               style: TextStyle(color: Colors.black54, height: 1.6),

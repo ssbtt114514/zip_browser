@@ -18,7 +18,7 @@
    起不来。
 
 **固定版本（Fixed Version）运行时**把一份特定版本的 Chromium/Edge 运行时随应用一起分发，
-装进「内核管理」后，宿主以
+放进 Gecko 风味的 `assets/bundled/kernel.zbk` 后，宿主以
 `WindowsSystemKernel(fixedRuntimeDir: <安装目录>/runtime)` 启动，内核 id 变为
 `system.windows_webview2_fixed`，从此不再依赖系统 Evergreen 版本。
 

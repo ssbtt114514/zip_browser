@@ -5,10 +5,11 @@
 - ✅ **Android**：调用系统 **Android System WebView**（不打包内核，随系统更新）；
   minSdk 21（Android 5.0，边界说明见
   [docs/ANDROID_COMPAT.md](docs/ANDROID_COMPAT.md)）
-- ✅ **Windows**：使用 **WebView2**（Edge Chromium），支持系统 Evergreen 内核
-  与内核包携带的 Fixed Version 固定内核
-- 🚧 **Linux / macOS**：架构已预留（占位内核），后续适配
-- 📦 独立内核包为 **`.zbk`**；提供**完整版 / 单内核版 / 无内核版**三种构建风味
+- ✅ **Windows**：使用 **WebView2**（Edge Chromium）
+- ✅ **Linux**：使用 **WebKitGTK**
+- 🚧 **macOS**：架构已预留，后续适配
+- 📦 构建风味 **无内核版 / Chromium 版 / Gecko 版**（内核随安装包内置，
+  应用内不再提供内核安装入口）
 - 🔌 zip 功能插件接口已于 **v0.12.0 移除**（历史版本说明见 Release）
 
 ## 功能特性
@@ -109,11 +110,22 @@ flutter run -d <android-device>   # Android
 flutter run -d windows            # Windows（需 Windows 主机 + WebView2 Runtime）
 ```
 
-### 3. 安装内核包
+### 3. 构建风味与内核
 
-- 菜单（右上角 ⋮）→ **工具 → 内核管理** → 安装 `.zbk` 独立内核包
-  （完整版风味）
-- 菜单 → **设置** → **浏览器内核** 可切换系统 / 独立内核（新标签页生效）
+内核随安装包内置，运行期不再安装：
+
+- **无内核版**：不包含引擎内核，用于扩展开发与内核包调试
+- **Chromium 版**（默认）：Android / Windows / Linux 调用系统 WebView，
+  随系统更新
+- **Gecko 版**：安装包内置 `kernel.zbk`，首次启动自动安装并选中
+
+选择风味：
+
+```bash
+flutter build apk --release --dart-define=ZIP_FLAVOR=gecko
+```
+
+`.zbk` 内核包格式本身仍保留，用于 Gecko 风味以外的定制内核分发。
 
 ### 4. 打包独立内核包
 
@@ -160,7 +172,7 @@ python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_li
 源码在 `native_kernels/zb_lite_kernel/`，设计与协议见
 **[docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)**。
 
-内核包制作与宿主内核管理的契约见 **[docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)**。
+内核包制作与宿主内核加载的契约见 **[docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)**。
 
 ### 6. 本地一键验证
 
@@ -206,10 +218,10 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 
 | 工作流 | 产物 |
 |--------|------|
-| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android universal release APK（`dist/zip-browser-android-universal.apk`，内含 arm64-v8a / armeabi-v7a / x86_64）；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
-| [build-linux.yml](.github/workflows/build-linux.yml) | Linux x64 桌面版 `zip-browser-linux-x64.tar.gz`（先跑单元测试；tar 内容会校验可执行文件与 GTK 引擎库） |
+| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android 三风味 release APK（none / chromium / gecko），含 arm64-v8a / armeabi-v7a / x86 / x86_64；gecko 风味用 NDK 编译四 ABI 并内置 `.zbk`；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
+| [build-linux.yml](.github/workflows/build-linux.yml) | Linux 三风味桌面版，x64 / arm64 两架构（`zip-browser-linux-<arch>-<flavor>.tar.gz`）；gecko 风味本机编译内核并内置；先跑单元测试 |
 | [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号；产出 `lite_kernel.zip` / `hello_ffi_kernel.zip` / `zb_lite_kernel.zbk`，另加 `zb_chromium_kernel.zbk`（自带固定版本 Chromium 运行时）与 `zb_gecko_kernel.zbk`（Gecko 引擎适配包）；推 `v*` tag 时把这 5 个包挂到 Release |
-| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建三种风味的 Windows release（full / single / none，按 `ZIP_FLAVOR` 区分命名）→ 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 构建三风味（none / chromium / gecko）× x64 / arm64 的 Windows release；gecko 用 MSVC 编译内核 DLL 并内置 → 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |
 
 ### 8. 引擎内核包：Chromium 固定版本 / Gecko 适配包
 
@@ -217,7 +229,7 @@ v0.7.0 起，Release 里除了轻量文本内核，还提供两个与"引擎"相
 
 | 内核包 | 清单类型 | 真实能力 | 适用平台 |
 |--------|----------|----------|----------|
-| `zb_chromium_kernel.zbk` | `webview2_fixed` | **真嵌入**：包内自带固定版本 Chromium（WebView2 Fixed Version，约 174 MB），安装后在「内核管理」选中即用它渲染页面，不依赖系统 Evergreen 运行时 | 仅 Windows |
+| `zb_chromium_kernel.zbk` | `webview2_fixed` | **真嵌入**：包内自带固定版本 Chromium（WebView2 Fixed Version，约 174 MB），在定制内核包路径下可替代系统内核渲染页面，不依赖系统 Evergreen 运行时 | 仅 Windows |
 | `zb_gecko_kernel.zbk` | `engine_adapter` | **只探测，不渲染**：检测本机是否存在 Gecko 运行时（`xul.dll` / `libxul.so` / GeckoView），如实报告命中的路径与版本（读不到就写"未读取到"，不编造），缺失时给出可照做的提示 | 全平台 |
 
 ```bash
@@ -285,7 +297,7 @@ lib/ui/         浏览器界面
   ├─ design/    设计令牌与语义色板（zb_design.dart）
   ├─ widgets/   标签栏 / 地址栏 / 联想下拉 / 工具栏 / 书签栏
   ├─ shortcuts/ 键盘快捷键与根焦点作用域
-  └─ pages/     设置、书签、历史、下载、内核管理等页面
+  └─ pages/     设置、书签、历史、下载、开发者工具箱、使用手册等页面
 native_plugins/ 内核渲染所需的原生表面（纹理）
 native_kernels/ 原生内核源码（zb_lite_kernel：零依赖软件渲染内核）
 example_plugins/ 内核示例（FFI 内核 DLL 构建与集成测试用）

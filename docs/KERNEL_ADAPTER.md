@@ -1,7 +1,7 @@
 # 引擎适配包（`type: engine_adapter`）
 
 引擎适配包是一种**不携带渲染库**的内核包：它把一个引擎谱系（当前是
-`gecko`）接进「内核管理」，由宿主的适配器内核负责**探测本机是否已有该引擎的
+`gecko`）接入内核列表，由宿主的适配器内核负责**探测本机是否已有该引擎的
 运行时**，并把探测结果如实展示给用户。
 
 > 结论先写在前面：**引擎适配包不渲染网页。** 它不加载 `xul.dll` /
@@ -19,7 +19,7 @@
 | 能否渲染 | 能 | 能 | **不能** |
 
 三者共用同一套安装与选择流程：`KernelPackage.install()` → `KernelManager` →
-`KernelRegistry.describe()` → 「内核管理」列表 → `KernelRegistry.createKernel()`。
+`KernelRegistry.describe()` → 设置页内核列表 → `KernelRegistry.createKernel()`。
 差异只在最后一步实例化出哪种 `BrowserKernel`。
 
 ## kernel.json 字段
@@ -97,7 +97,7 @@
 | `clearCookies()` / `clearCache()` | 无害 no-op |
 | `capabilities` | 空集合：界面不会显示"网页加载 / 脚本执行"等标签 |
 
-「内核管理」与设置页会为 `type: engine_adapter` 的包显示琥珀色提示，例如
+设置页会为 `type: engine_adapter` 的包显示琥珀色提示，例如
 「引擎适配包：只探测本机引擎运行时，不提供网页渲染」，避免用户误以为切过去
 就能上网。
 
@@ -111,7 +111,7 @@ Gecko 目前**没有**可供第三方离屏嵌入渲染的发行版：Mozilla �
   嵌入、进程模型、协议桥接），目前不存在。
 - **Android**：需要宿主 APK 集成 GeckoView（AAR），由宿主内核实现渲染与
   `GeckoSession` 生命周期——这属于宿主侧工程，无法通过内核包下发。
-- **现在就想上网**：在内核管理里切回系统内核（Windows WebView2 / Linux
+- **现在就想上网**：在设置页切回系统内核（Windows WebView2 / Linux
   WebKitGTK / Android System WebView），或安装携带 FFI 原生库、WebView2 固定
   版本运行时的内核包。
 

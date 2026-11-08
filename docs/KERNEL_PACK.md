@@ -1,15 +1,15 @@
 # 独立内核包（.zbk）制作指南
 
-`.zbk`（Zip Browser Kernel）是**独立浏览器内核包**，本质是 zip，通过
-**设置 → 内核管理 → 安装内核包**载入。它只提供一个可替换的内核，
-不包含网页内容脚本等功能扩展。
+`.zbk`（Zip Browser Kernel）是**独立浏览器内核包**，本质是 zip。应用内
+不再提供安装入口：Gecko 风味会把 `assets/bundled/kernel.zbk` 在首次启动时
+自动安装并选中。它只提供一个可替换的内核，不包含网页内容脚本等功能扩展。
 
 > 功能插件（content script / 后台 / UI）请看 [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md)。
 > 内核原生函数的 C ABI 请看 [KERNEL_ABI.md](KERNEL_ABI.md)。
 
 ## 与「插件携带内核」的区别
 
-- **独立内核包 `.zbk`**：目的就是替换内核，由内核管理页安装切换。
+- **独立内核包 `.zbk`**：目的就是替换内核，随 Gecko 风味安装包内置。
 - **功能插件中的 `kernel` 字段**：一个插件在加功能的同时附带内核，
   见 [PLUGIN_KERNEL_GUIDE.md](PLUGIN_KERNEL_GUIDE.md)。
 
@@ -49,6 +49,7 @@ zip-browser-kernel-chromium-120.0.0.zbk
     "android": {
       "arm64-v8a": "bin/android/arm64-v8a/libkernel.so",
       "armeabi-v7a": "bin/android/armeabi-v7a/libkernel.so",
+      "x86": "bin/android/x86/libkernel.so",
       "x86_64": "bin/android/x86_64/libkernel.so"
     }
   },
@@ -88,7 +89,7 @@ python tool/pack_kernel.py path/to/kernel_dir zip_browser_kernel.zbk
 - `abi_version` 是否与宿主一致；
 - `libraries` 中声明的每个库文件是否真实存在。
 
-校验通过即输出 `.zbk`。在内核管理页安装后，可在内核列表中选中切换；
+校验通过即输出 `.zbk`。把它放到 `assets/bundled/kernel.zbk` 后以 Gecko 风味构建，
 新开标签页使用选中内核，系统内核始终保留、可随时切回。
 
 ## 引擎适配包（`type: engine_adapter`）
