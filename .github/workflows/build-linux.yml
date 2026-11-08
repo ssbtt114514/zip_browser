@@ -164,7 +164,7 @@ jobs:
           set -euo pipefail
           python3 tool/build_engine_kernels.py --platform linux
           mkdir -p assets/bundled
-          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk
+          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk --platforms linux
           python3 - <<'PY'
           import zipfile
           with zipfile.ZipFile('assets/bundled/kernel.zbk') as z:

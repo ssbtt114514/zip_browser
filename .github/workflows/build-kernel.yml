@@ -85,7 +85,7 @@ jobs:
       - name: Pack .zbk
         run: |
           set -euo pipefail
-          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-android.zbk
+          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-android.zbk --platforms android
           python3 - <<'PY'
           import zipfile
           with zipfile.ZipFile('dist/zip-browser-kernel-gecko-android.zbk') as z:
@@ -125,7 +125,7 @@ jobs:
       - name: Pack .zbk
         run: |
           set -euo pipefail
-          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk
+          python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk --platforms linux
           python3 - <<'PY'
           import zipfile
           with zipfile.ZipFile('dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk') as z:
@@ -195,7 +195,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          python tool/pack_kernel.py "$env:PKG" "dist/zip-browser-kernel-gecko-windows-${{ matrix.arch }}.zbk"
+          python tool/pack_kernel.py "$env:PKG" "dist/zip-browser-kernel-gecko-windows-${{ matrix.arch }}.zbk" --platforms windows
           if ($LASTEXITCODE -ne 0) { throw "打包失败：$LASTEXITCODE" }
 
       - uses: actions/upload-artifact@v4

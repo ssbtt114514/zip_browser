@@ -9,6 +9,10 @@
 的库全部缺失。所以校验放在打包这一步：清单与实际不一致就直接拒绝打包。
 """
 import os
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def declared_libraries(manifest, kind):

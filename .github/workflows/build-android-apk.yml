@@ -103,7 +103,7 @@ jobs:
           export ANDROID_NDK="$SDK/ndk/28.2.13676358"
           python3 tool/build_engine_kernels.py --platform android
           mkdir -p assets/bundled
-          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk
+          python3 tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk --platforms android
           unzip -l assets/bundled/kernel.zbk
 
       - name: Resolve dependencies

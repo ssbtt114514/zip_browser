@@ -34,6 +34,11 @@ import re
 import sys
 import zipfile
 
+# Windows 控制台默认 cp1252，打印中文提示会抛 UnicodeEncodeError，
+# 这里统一改成 UTF-8，保证 CI 上校验失败时能看到真实原因。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pack_common  # noqa: E402  （与打包器同目录的共用校验）
 
@@ -240,18 +245,6 @@ def pack_dir(src, out, platforms=None):
         if runtime_errors:
             return report_webview2_runtime_errors(src, runtime_errors)
 
-    # 清单声明了某个平台的库，包里就必须真的有这个文件；否则打出来的
-    # .zbk 会「声明得比实际多」，安装后该平台必然不可用。
-    missing = pack_common.missing_libraries(src, manifest, "kernel")
-    if missing:
-        return pack_common.report_missing(
-            src, missing, MANIFEST_ENTRY,
-            hint=("提示：独立内核包的库由插件内核目录装配而来，可先执行\n"
-                  "  python tool/assemble_kernel_pkg.py\n"
-                  "（它会从 example_plugins/lite_kernel/kernels 装配各平台产物；"
-                  "缺少的平台需先用 tool/build_lite_kernel.sh 或 "
-                  "tool\\build_lite_kernel.bat 构建，或直接取 CI 产物）"))
-
     # —— 按平台拆分打包 ——
     # 用法：--platforms windows,linux,android
     # 打出来的 .zbk 只含指定平台的库，libraries 同步改写。
@@ -276,6 +269,18 @@ def pack_dir(src, out, platforms=None):
             runtime_errors = check_webview2_runtime(src, manifest)
             if runtime_errors:
                 return report_webview2_runtime_errors(src, runtime_errors)
+
+    # 清单声明了某个平台的库，包里就必须真的有这个文件；否则打出来的
+    # .zbk 会「声明得比实际多」，安装后该平台必然不可用。
+    missing = pack_common.missing_libraries(src, manifest, "kernel")
+    if missing:
+        return pack_common.report_missing(
+            src, missing, MANIFEST_ENTRY,
+            hint=("提示：独立内核包的库由插件内核目录装配而来，可先执行\n"
+                  "  python tool/assemble_kernel_pkg.py\n"
+                  "（它会从 example_plugins/lite_kernel/kernels 装配各平台产物；"
+                  "缺少的平台需先用 tool/build_lite_kernel.sh 或 "
+                  "tool\\build_lite_kernel.bat 构建，或直接取 CI 产物）"))
 
     count = write_zip(src, out,
                       manifest=manifest if platforms is not None else None,

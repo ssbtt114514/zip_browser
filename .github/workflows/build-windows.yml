@@ -211,7 +211,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item $dll.FullName "$out/zb_gecko_kernel.dll" -Force
           New-Item -ItemType Directory -Force -Path assets/bundled | Out-Null
-          python tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk
+          python tool/pack_kernel.py build_kernel_pkg/zb_gecko_kernel assets/bundled/kernel.zbk --platforms windows
           if ($LASTEXITCODE -ne 0) { throw "内核打包失败：$LASTEXITCODE" }
           Get-Item assets/bundled/kernel.zbk | ForEach-Object {
             Write-Host ("内置内核包：{0:N0} 字节" -f $_.Length)
