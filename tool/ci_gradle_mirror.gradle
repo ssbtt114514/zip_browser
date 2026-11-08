@@ -1,0 +1,29 @@
+// CI 专用 Gradle 初始化脚本：把 Maven Central 换成阿里云镜像。
+//
+// 背景：GitHub 托管运行器访问 repo.maven.apache.org 时会被重定向到
+// github.com/JetBrains/... 的 Release 资源，该地址在高峰期返回 504，
+// 导致 Kotlin 编译器下载失败。镜像直接提供同一批构件，避免这一跳转。
+//
+// 用法：复制到 $GRADLE_USER_HOME/init.d/ 后由 Gradle 自动加载。
+
+def mirrorUrl = 'https://maven.aliyun.com/repository/public'
+
+def rewrite = { repos ->
+    repos.withType(MavenArtifactRepository).configureEach { repo ->
+        def current = repo.url.toString()
+        if (current.startsWith('https://repo.maven.apache.org') ||
+            current.startsWith('https://repo1.maven.org')) {
+            repo.url = new URI(mirrorUrl)
+        }
+    }
+}
+
+allprojects { project ->
+    rewrite(project.repositories)
+    rewrite(project.buildscript.repositories)
+}
+
+settingsEvaluated { settings ->
+    rewrite(settings.pluginManagement.repositories)
+    rewrite(settings.dependencyResolutionManagement.repositories)
+}

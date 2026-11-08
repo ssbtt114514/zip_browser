@@ -88,6 +88,13 @@ jobs:
           channel: stable
           cache: true
 
+      # 把 Maven Central 换成镜像：GitHub 运行器访问 Central 会被重定向到
+      # GitHub Release 资源，高峰期 504（Kotlin 编译器下载失败）。
+      - name: Configure Gradle mirror (CI)
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp tool/ci_gradle_mirror.gradle "$HOME/.gradle/init.d/ci-mirror.gradle"
+
       - name: Patch Android Gradle (compileSdk / minSdk / ML Kit, idempotent)
         run: python3 tool/patch_android_gradle.py
 
