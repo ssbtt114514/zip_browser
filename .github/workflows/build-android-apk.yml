@@ -111,11 +111,33 @@ jobs:
 
       # 按 CPU 架构拆分成 4 个安装包（arm64-v8a / armeabi-v7a / x86 / x86_64），
       # 体积更小；另产一个 universal 全架构包（单包兼容所有设备）。
+      # Gradle 首次构建要从 GitHub Releases 下载 Kotlin 编译器，偶发 504，
+      # 因此两处构建都做有限重试。
       - name: Build split-per-abi APKs
-        run: flutter build apk --release --split-per-abi --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if flutter build apk --release --split-per-abi \
+                --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}; then
+              exit 0
+            fi
+            echo "第 $attempt 次构建失败，30 秒后重试" >&2
+            sleep 30
+          done
+          exit 1
 
       - name: Build universal APK
-        run: flutter build apk --release --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if flutter build apk --release \
+                --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}; then
+              exit 0
+            fi
+            echo "第 $attempt 次构建失败，30 秒后重试" >&2
+            sleep 30
+          done
+          exit 1
 
       - name: Collect APKs
         run: |
