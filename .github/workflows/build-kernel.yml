@@ -85,6 +85,7 @@ jobs:
       - name: Pack .zbk
         run: |
           set -euo pipefail
+          mkdir -p dist
           python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-android.zbk --platforms android
           python3 - <<'PY'
           import zipfile
@@ -125,6 +126,7 @@ jobs:
       - name: Pack .zbk
         run: |
           set -euo pipefail
+          mkdir -p dist
           python3 tool/pack_kernel.py "$PKG" dist/zip-browser-kernel-gecko-linux-${{ matrix.arch }}.zbk --platforms linux
           python3 - <<'PY'
           import zipfile

@@ -201,7 +201,15 @@ class UrlInput {
     if (t.startsWith('//')) return _isValidAuthority(t.substring(2));
     final schemeMatch = _schemeRe.firstMatch(t);
     if (schemeMatch != null) {
-      return _webSchemes.contains(schemeMatch.group(1)!.toLowerCase());
+      final scheme = schemeMatch.group(1)!.toLowerCase();
+      final rest = t.substring(schemeMatch.end);
+      // 与 toUrl 保持一致：「host:port」也会匹配 scheme 正则，只有
+      // 后面跟 "//" 或本身就是无斜杠 scheme 时才按 scheme 处理，
+      // 否则继续走主机判定。
+      const bareSchemes = {'data', 'about', 'blob', 'javascript'};
+      if (rest.startsWith('//') || bareSchemes.contains(scheme)) {
+        return _webSchemes.contains(scheme);
+      }
     }
     return toUrl(t) != null;
   }

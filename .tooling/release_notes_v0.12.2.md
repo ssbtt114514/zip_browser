@@ -18,6 +18,12 @@
 
 ## 修复
 
+- **带端口地址识别**：`localhost:8080` / `example.com:8080/x` 被 scheme
+  正则误判成未知协议，`isLikelyUrl` 直接返回 false；现在与 `toUrl` 共用
+  「scheme 后必须跟 //」的判定，带端口地址恢复正常。
+- **内核选择被风味限制**：Chromium 风味此前忽略已安装内核的选择，
+  导致内核包选中后仍走系统 WebView；现在三种网页风味都优先使用选中的
+  内核包，未选择时才回落系统内核。
 - **CI 静态检查失败**：首页内置 JS 正则中的 `$/` 在 Dart 模板串里未转义，
   触发 `missing_identifier`；OCR 服务多余 `await` 触发 `await_only_futures`。
   两处已修复，`flutter analyze` 恢复通过。

@@ -235,10 +235,9 @@ class KernelRegistry {
   BrowserKernel createKernel(String tabId) {
     // 无内核风味：任何情况下都使用占位内核
     if (!BuildFlavorInfo.webEnabled) return StubKernel();
-    // 仅 Gecko 风味使用随包内置内核；Chromium 风味固定系统 WebView
-    final selected = BuildFlavorInfo.current == BuildFlavor.gecko
-        ? config.selectedKernelId
-        : null;
+    // 已安装内核包在三种网页风味下都可被选中（Gecko 风味的随包内核
+    // 由 seedBundledKernel 在启动时写入选择）；未选择时走系统内核。
+    final selected = config.selectedKernelId;
 
     if (selected != null && selected.startsWith('kernel.')) {
       final pkg = kernelManager?.byKernelId(selected);
