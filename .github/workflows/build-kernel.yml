@@ -100,6 +100,15 @@ jobs:
         with:
           name: zbk-gecko-android
           path: dist/*.zbk
+
+      # 打 v* tag 时把内核包挂到 Release（应用包的 gecko 风味已内置内核，
+      # 这里供需要单独下载/替换内核的场景使用）。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zbk
+          fail_on_unmatched_files: false
           if-no-files-found: error
 
   # ---------------------------------------------------------------
@@ -140,6 +149,15 @@ jobs:
         with:
           name: zbk-gecko-linux-${{ matrix.arch }}
           path: dist/*.zbk
+
+      # 打 v* tag 时把内核包挂到 Release（应用包的 gecko 风味已内置内核，
+      # 这里供需要单独下载/替换内核的场景使用）。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zbk
+          fail_on_unmatched_files: false
           if-no-files-found: error
 
   # ---------------------------------------------------------------
@@ -212,4 +230,13 @@ jobs:
         with:
           name: zbk-gecko-windows-${{ matrix.arch }}
           path: dist/*.zbk
+
+      # 打 v* tag 时把内核包挂到 Release（应用包的 gecko 风味已内置内核，
+      # 这里供需要单独下载/替换内核的场景使用）。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zbk
+          fail_on_unmatched_files: false
           if-no-files-found: error
