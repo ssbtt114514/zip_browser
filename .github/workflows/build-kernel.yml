@@ -186,7 +186,15 @@ jobs:
             'zb_kernel_attach_surface','zb_kernel_tick',
             'zb_kernel_dispatch_from_host','zb_free_ptr'
           )
-          $text = (& dumpbin /nologo /exports $dll.FullName) -join "`n"
+          # arm64 目标下 msvc-dev-cmd 不保证把 dumpbin 加进 PATH，
+          # 这里显式从 MSVC 安装目录定位（x64 版 dumpbin 可读 ARM64 二进制）。
+          $dumpbin = (Get-Command dumpbin.exe -ErrorAction SilentlyContinue).Source
+          if (-not $dumpbin -and $env:VCToolsInstallDir) {
+            $dumpbin = (Get-ChildItem (Join-Path $env:VCToolsInstallDir 'bin') -Recurse -Filter dumpbin.exe |
+                        Select-Object -First 1).FullName
+          }
+          if (-not $dumpbin) { throw '未找到 dumpbin.exe' }
+          $text = (& $dumpbin /nologo /exports $dll.FullName) -join "`n"
           $missing = $required | Where-Object { $text -notmatch [regex]::Escape($_) }
           if ($missing) { throw "缺少导出符号：$($missing -join ', ')" }
 
