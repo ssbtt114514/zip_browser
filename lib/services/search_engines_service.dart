@@ -19,9 +19,16 @@ class SearchEngine {
   });
 
   /// 根据关键词生成搜索 URL
+  ///
+  /// 模板缺少 `{q}`（例如旧版本保存的自定义项）时退化为追加 q 参数，
+  /// 避免关键词被静默丢弃。
   String resolve(String query) {
     final encoded = Uri.encodeQueryComponent(query);
-    return urlTemplate.replaceAll('{q}', encoded);
+    if (urlTemplate.contains('{q}')) {
+      return urlTemplate.replaceAll('{q}', encoded);
+    }
+    final sep = urlTemplate.contains('?') ? '&' : '?';
+    return '$urlTemplate${sep}q=$encoded';
   }
 
   Map<String, dynamic> toJson() => {

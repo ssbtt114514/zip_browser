@@ -20,7 +20,9 @@ android {
         applicationId = "com.zipbrowser.zip_browser"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Zip Browser：固定 21（Android 5.0，Flutter 引擎下限；
+        // Android 4.x 的支持结论见 docs/ANDROID_COMPAT.md）
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -48,6 +50,9 @@ kotlin {
 dependencies {
     // FileProvider：WebView 文件选择器（input[type=file] 相机）需要
     implementation("androidx.core:core-ktx:1.13.1")
+    // 文字识别（OCR）中文脚本原生库；lib/services/ocr_service.dart 使用
+    // TextRecognitionScript.chinese，缺了它运行时会报脚本识别器缺失。
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }
 
 flutter {

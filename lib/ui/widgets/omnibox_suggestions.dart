@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +25,11 @@ class OmniboxSuggestions extends StatelessWidget {
     final zb = context.zb;
     final items = controller.suggestions;
     final width = controller.width;
+    // 面板高度随窗口收缩：横屏手机等矮窗口下不会超出内容区
+    final maxListHeight = math
+        .min(340.0, MediaQuery.sizeOf(context).height - 200)
+        .clamp(120.0, 340.0)
+        .toDouble();
 
     return Positioned(
       left: 0,
@@ -49,8 +56,26 @@ class OmniboxSuggestions extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (controller.isShowingRecents)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          ZbTokens.s5, ZbTokens.s4, ZbTokens.s5, ZbTokens.s2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.history, size: 13, color: zb.textFaint),
+                          const SizedBox(width: ZbTokens.s3),
+                          Text(
+                            '最近访问',
+                            style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: zb.textFaint),
+                          ),
+                        ],
+                      ),
+                    ),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 340),
+                    constraints: BoxConstraints(maxHeight: maxListHeight),
                     child: ListView.builder(
                       padding:
                           const EdgeInsets.symmetric(vertical: ZbTokens.s2),
@@ -62,7 +87,7 @@ class OmniboxSuggestions extends StatelessWidget {
                         onHover: () => controller.setHighlight(i),
                         onTap: () {
                           final tm = context.read<TabManager>();
-                          controller.close();
+                          controller.close(keepText: true);
                           BrowserFocus.take(context);
                           tm.navigateActive(items[i].url);
                         },
@@ -138,6 +163,13 @@ class _SuggestionRow extends StatelessWidget {
         iconColor = zb.textMuted;
     }
 
+    // 动作提示：地址型 / 搜索型建议直接标出按 Enter 的行为
+    final String? actionLabel = switch (suggestion.kind) {
+      SuggestionKind.open => '打开',
+      SuggestionKind.search => '搜索',
+      _ => null,
+    };
+
     return MouseRegion(
       onEnter: (_) => onHover(),
       cursor: SystemMouseCursors.click,
@@ -145,7 +177,7 @@ class _SuggestionRow extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          height: 40,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s5),
           decoration: BoxDecoration(
             color: selected ? zb.suggestionHighlight : Colors.transparent,
@@ -180,7 +212,25 @@ class _SuggestionRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (selected)
+              if (actionLabel != null)
+                Container(
+                  margin: const EdgeInsets.only(left: ZbTokens.s4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: ZbTokens.s3, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    actionLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: primary,
+                    ),
+                  ),
+                )
+              else if (selected)
                 Icon(Icons.keyboard_return, size: 15, color: zb.textFaint),
             ],
           ),

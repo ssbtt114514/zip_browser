@@ -249,22 +249,11 @@ class SettingsPage extends StatelessWidget {
                       save: config.setAdBlockAllowDomains,
                     ),
                   ),
-                ],
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('仅允许受信任白名单插件',
-                      style: TextStyle(fontSize: 13.5)),
-                  subtitle: const Text('开启后未在白名单中的 zip 将被拒绝安装',
-                      style: TextStyle(fontSize: 11.5)),
-                  trailing: AdaptiveSwitch(
-                    value: config.enforceTrustedOnly,
-                    onChanged: config.setEnforceTrustedOnly,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+                 ],
+               ],
+             ),
+           ),
+           const SizedBox(height: 20),
 
           // —— AI 解读 ——
           const _SectionTitle('AI 解读'),

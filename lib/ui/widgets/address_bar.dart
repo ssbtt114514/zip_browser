@@ -80,15 +80,48 @@ class _OmniboxPill extends StatelessWidget {
         boxShadow: zb.softShadow(),
       ),
       padding: const EdgeInsets.symmetric(horizontal: ZbTokens.s2),
-      child: Row(
-        children: [
-          _SecurityButton(tab: tab),
-          Expanded(child: _OmniboxField(tab: tab, controller: controller)),
-          _ZoomChip(tab: tab),
-          _ReloadButton(tab: tab),
-          _BookmarkButton(tab: tab),
-          const SizedBox(width: ZbTokens.s2),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 窄屏渐进隐藏次要按钮：先收缩放胶囊，再收书签星标，
+          // 始终保留输入区、安全标识与刷新按钮。
+          final hideZoom = constraints.maxWidth < 420;
+          final hideBookmark = constraints.maxWidth < 340;
+          return Row(
+            children: [
+              _SecurityButton(tab: tab),
+              Expanded(child: _OmniboxField(tab: tab, controller: controller)),
+              if (focused && controller.text.text.isNotEmpty)
+                _ClearButton(controller: controller),
+              if (!hideZoom) _ZoomChip(tab: tab),
+              _ReloadButton(tab: tab),
+              if (!hideBookmark) _BookmarkButton(tab: tab),
+              const SizedBox(width: ZbTokens.s2),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 一键清空输入（仅在聚焦且非空时出现）
+class _ClearButton extends StatelessWidget {
+  final OmniboxController controller;
+
+  const _ClearButton({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final zb = context.zb;
+    return Tooltip(
+      message: '清空输入',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: controller.clearText,
+        child: Padding(
+          padding: const EdgeInsets.all(ZbTokens.s3),
+          child: Icon(Icons.cancel, size: 15, color: zb.textFaint),
+        ),
       ),
     );
   }
@@ -319,7 +352,7 @@ class _OmniboxField extends StatelessWidget {
   Widget build(BuildContext context) {
     final zb = context.zb;
 
-    // ↑/↓ 选择建议，Esc 收起，Tab 补全
+    // ↑/↓ 选择建议，Esc 先收下拉再退出，Tab 补全
     controller.focusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
       final key = event.logicalKey;
@@ -332,16 +365,15 @@ class _OmniboxField extends StatelessWidget {
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.escape) {
-        controller.close();
+        controller.escape();
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.tab) {
-        final s = controller.suggestions;
-        if (s.isNotEmpty && controller.highlight >= 0) {
-          final picked = s[controller.highlight];
+        final completion = controller.completionForHighlight();
+        if (completion != null) {
           controller.text.value = TextEditingValue(
-            text: picked.url,
-            selection: TextSelection.collapsed(offset: picked.url.length),
+            text: completion,
+            selection: TextSelection.collapsed(offset: completion.length),
           );
           return KeyEventResult.handled;
         }
@@ -353,6 +385,9 @@ class _OmniboxField extends StatelessWidget {
       controller: controller.text,
       focusNode: controller.focusNode,
       textInputAction: TextInputAction.go,
+      keyboardType: TextInputType.url,
+      autocorrect: false,
+      enableSuggestions: false,
       maxLines: 1,
       style: TextStyle(fontSize: 14.5, color: zb.textPrimary),
       cursorColor: Theme.of(context).colorScheme.primary,
@@ -368,7 +403,9 @@ class _OmniboxField extends StatelessWidget {
       onChanged: controller.onQueryChanged,
       onSubmitted: (value) {
         final picked = controller.commitTarget(value);
-        controller.close();
+        // 有导航目标时先保留用户输入，等页面开始加载后再由地址监听刷新；
+        // 没有目标（例如空输入按 Enter）则正常回填当前页面地址。
+        controller.close(keepText: picked != null);
         if (picked != null) {
           context.read<TabManager>().navigateActive(picked.url);
         }

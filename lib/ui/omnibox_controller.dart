@@ -30,6 +30,18 @@ class OmniboxController extends ChangeNotifier {
   List<UrlSuggestion> _suggestions = const [];
   int _highlight = -1;
 
+  /// 当前输入（仅在聚焦时可作建议依据；空串时建议列表展示最近访问）
+  String _query = '';
+
+  /// 用户是否主动移动过高亮项（键盘 ↑/↓ 或鼠标悬停）。
+  ///
+  /// 用于区分「默认高亮的第一条」与「用户明确选中的条目」：
+  /// 只有后者才会在 Enter 时覆盖输入框里的文字。
+  bool _explicitHighlight = false;
+
+  /// 关闭后是否保留输入框文字（提交导航时保留，避免地址瞬间跳回旧地址）
+  bool _keepTextOnUnfocus = false;
+
   /// 当前绑定的标签（用于跟随地址变化）
   TabModel? _tab;
   VoidCallback? _urlListener;
@@ -54,8 +66,15 @@ class OmniboxController extends ChangeNotifier {
 
   bool get isFocused => _focused;
 
+  /// 当前输入的原始文本（空串表示展示最近访问）
+  String get query => _query;
+
+  /// 当前是否展示「最近访问」（输入为空）
+  bool get isShowingRecents => _query.trim().isEmpty;
+
   /// 下拉面板是否应显示
-  bool get showSuggestions => _focused && _suggestions.isNotEmpty;
+  bool get showSuggestions =>
+      _focused && _suggestions.isNotEmpty && width > 0;
 
   /// 地址栏文本的展示形式：内置页与 data: 页不显示地址
   static String displayUrl(String url) {
@@ -141,13 +160,20 @@ class OmniboxController extends ChangeNotifier {
       // 聚焦时全选，方便直接覆写
       final len = text.text.length;
       text.selection = TextSelection(baseOffset: 0, extentOffset: len);
-      _recompute();
+      // 聚焦立刻给出最近访问，而不是拿当前网址去匹配历史
+      _recompute(query: '');
     } else {
       _suggestions = const [];
       _highlight = -1;
-      // 失焦后回到当前页面地址
-      final tab = _tab;
-      if (tab != null) _applyText(displayUrl(tab.url.value));
+      _explicitHighlight = false;
+      _query = '';
+      // 失焦后回到当前页面地址；提交导航时保留用户输入
+      if (_keepTextOnUnfocus) {
+        _keepTextOnUnfocus = false;
+      } else {
+        final tab = _tab;
+        if (tab != null) _applyText(displayUrl(tab.url.value));
+      }
     }
     notifyListeners();
   }
@@ -158,9 +184,19 @@ class OmniboxController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 清空输入（点右侧 × 按钮）；等同于用户删掉全部文字
+  void clearText() {
+    if (text.text.isEmpty) return;
+    _writeText('');
+    _recompute(query: '');
+    notifyListeners();
+  }
+
   void _recompute({String? query}) {
     final service = _suggest;
-    final q = query ?? text.text;
+    final q = (query ?? _query).trim();
+    _query = q;
+    _explicitHighlight = false;
     if (service == null) {
       _suggestions = const [];
       _highlight = -1;
@@ -177,6 +213,7 @@ class OmniboxController extends ChangeNotifier {
     if (next < 0) next = _suggestions.length - 1;
     if (next >= _suggestions.length) next = 0;
     _highlight = next;
+    _explicitHighlight = true;
     notifyListeners();
   }
 
@@ -184,26 +221,43 @@ class OmniboxController extends ChangeNotifier {
     if (index < 0 || index >= _suggestions.length) return;
     if (_highlight == index) return;
     _highlight = index;
+    _explicitHighlight = true;
     notifyListeners();
+  }
+
+  /// Tab 补全：搜索建议补查询词，其余补完整 URL；没有可补项返回 null
+  String? completionForHighlight() {
+    if (_highlight < 0 || _highlight >= _suggestions.length) return null;
+    final s = _suggestions[_highlight];
+    if (s.kind == SuggestionKind.search) return s.text;
+    return s.url;
   }
 
   /// 提交当前输入，返回要导航的目标（null 表示不导航）。
   ///
-  /// [rawInput] 为空时回退到高亮建议；若高亮项是"搜索 / 直达"建议则优先采用。
+  /// 规则：
+  /// * 输入为空：只有用户主动高亮过条目时，Enter 才打开该条目；
+  /// * 用户主动高亮过：Enter 采用高亮条目（书签 / 历史也能直接打开）；
+  /// * 否则采用「打开 / 搜索」首条建议（它镜像当前输入）；
+  /// * 没有建议时把输入原样交给地址栏解析（域名补全 / 搜索词）。
   UrlSuggestion? commitTarget(String rawInput) {
     final trimmed = rawInput.trim();
+    final hasPick = _highlight >= 0 && _highlight < _suggestions.length;
+
     if (trimmed.isEmpty) {
-      if (_highlight >= 0 && _highlight < _suggestions.length) {
-        return _suggestions[_highlight];
-      }
+      if (hasPick && _explicitHighlight) return _suggestions[_highlight];
       return null;
     }
-    if (_highlight >= 0 && _highlight < _suggestions.length) {
+
+    if (hasPick) {
       final s = _suggestions[_highlight];
-      if (s.kind == SuggestionKind.search || s.kind == SuggestionKind.open) {
+      final mirrorsInput =
+          s.kind == SuggestionKind.search || s.kind == SuggestionKind.open;
+      if (_explicitHighlight || (_highlight == 0 && mirrorsInput)) {
         return s;
       }
     }
+
     return UrlSuggestion(
       text: trimmed,
       url: trimmed,
@@ -211,13 +265,26 @@ class OmniboxController extends ChangeNotifier {
     );
   }
 
-  /// 关闭下拉并失焦
-  void close() {
+  /// Esc：先收起下拉，再按一次才退出编辑
+  void escape() {
+    if (_suggestions.isNotEmpty) {
+      collapseSuggestions();
+    } else {
+      close();
+    }
+  }
+
+  /// 关闭下拉并失焦；[keepText] 为 true 时保留输入框文字
+  void close({bool keepText = false}) {
     _suggestions = const [];
     _highlight = -1;
+    _explicitHighlight = false;
+    _query = '';
     if (focusNode.hasFocus) {
+      _keepTextOnUnfocus = keepText;
       focusNode.unfocus();
     } else {
+      _keepTextOnUnfocus = false;
       notifyListeners();
     }
   }
@@ -227,6 +294,7 @@ class OmniboxController extends ChangeNotifier {
     if (_suggestions.isEmpty && _highlight == -1) return;
     _suggestions = const [];
     _highlight = -1;
+    _explicitHighlight = false;
     notifyListeners();
   }
 

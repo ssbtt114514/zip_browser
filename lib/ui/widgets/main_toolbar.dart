@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/build_flavor.dart';
 import '../../core/constants.dart';
-import '../../core/plugin/plugin_manager.dart';
 import '../../core/tab/tab_manager.dart';
 import '../../core/tab/tab_model.dart';
 import '../../core/tab/url_utils.dart';
@@ -22,7 +21,7 @@ import '../pages/devtools_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import '../pages/kernels_page.dart';
-import '../pages/plugins_page.dart';
+import '../pages/ocr_page.dart';
 import '../pages/qr_scan_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/update_dialog.dart';
@@ -30,7 +29,7 @@ import '../pages/userscripts_page.dart';
 import 'address_bar.dart';
 import 'zb_tool_button.dart';
 
-/// 主工具栏：导航控制 + 地址栏 + 工具箱 + 扩展按钮 + 主菜单。
+/// 主工具栏：导航控制 + 地址栏 + 工具箱 + 主菜单。
 class MainToolbar extends StatelessWidget {
   const MainToolbar({super.key});
 
@@ -40,7 +39,7 @@ class MainToolbar extends StatelessWidget {
     final tab = tm.active;
     final config = context.watch<ConfigService>();
     // 底部导航模式（窄屏 + 设置开启）：顶栏只保留搜索框，
-    // 后退/前进/主页/工具箱/扩展/菜单全部收到底部导航栏（BottomNavBar 已有对应按钮）。
+    // 后退/前进/主页/工具箱/菜单全部收到底部导航栏（BottomNavBar 已有对应按钮）。
     final width = MediaQuery.sizeOf(context).width;
     final minimal = width < 720 && config.bottomNavEnabled;
 
@@ -91,7 +90,6 @@ class MainToolbar extends StatelessWidget {
                 onTap: ui.toggleSecondary,
               ),
             ),
-            if (BuildFlavorInfo.pluginSystemEnabled) const _ExtensionButtons(),
             const _MainMenuButton(),
           ],
         ],
@@ -100,28 +98,193 @@ class MainToolbar extends StatelessWidget {
   }
 }
 
-/// 主菜单（⋮）。菜单项与处理逻辑抽为顶层共享函数（[mainMenuEntries] /
-/// [handleMainMenuAction]），供底部导航栏（Firefox 风格）复用。
+/// 主菜单（⋮）。桌面 / 宽屏用 [MenuAnchor] + [SubmenuButton] 呈现二级菜单；
+/// 动作处理抽为顶层共享函数（[handleMainMenuAction]），供底部导航栏复用。
 class _MainMenuButton extends StatelessWidget {
   const _MainMenuButton();
 
   @override
   Widget build(BuildContext context) {
-    final tm = context.watch<TabManager>();
-    final config = context.watch<ConfigService>();
-    final tab = tm.active;
+    return MenuAnchor(
+      menuChildren: [
+        _Submenu(
+          icon: Icons.tab_outlined,
+          label: '标签页',
+          children: [
+            _item(context, '新建标签页', 'new_tab', Icons.add, hint: 'Ctrl+T'),
+            _item(context, '新建隐私标签', 'new_private',
+                Icons.visibility_off_outlined,
+                hint: 'Ctrl+Shift+N'),
+            Builder(builder: (context) {
+              final canReopen = context.watch<TabManager>().canReopenClosedTab;
+              return _item(
+                context,
+                canReopen ? '恢复关闭的标签页' : '恢复关闭的标签页（无）',
+                'reopen',
+                Icons.restore_page_outlined,
+                hint: 'Ctrl+Shift+T',
+                enabled: canReopen,
+              );
+            }),
+            _item(context, '恢复上次会话', 'restore_session',
+                Icons.history_toggle_off),
+          ],
+        ),
+        _Submenu(
+          icon: Icons.description_outlined,
+          label: '页面',
+          children: [
+            _item(context, '刷新', 'reload', Icons.refresh, hint: 'F5'),
+            _item(context, '强制刷新（忽略缓存）', 'hard_reload', Icons.cached,
+                hint: 'Ctrl+Shift+R'),
+            _item(context, '页面中查找', 'find', Icons.search, hint: 'Ctrl+F'),
+            if (BuildFlavorInfo.current != BuildFlavor.none) ...[
+              _item(context, '翻译网页 / 选中文本', 'translate', Icons.translate),
+              _item(context, 'AI 解读本页', 'ai_read', Icons.auto_awesome),
+            ],
+          ],
+        ),
+        _Submenu(
+          icon: Icons.folder_outlined,
+          label: '数据',
+          children: [
+            _item(context, '书签', 'bookmarks', Icons.bookmark_outline,
+                hint: 'Ctrl+Shift+O'),
+            _item(context, '历史记录', 'history', Icons.history, hint: 'Ctrl+H'),
+            _item(context, '下载内容', 'downloads', Icons.download_outlined,
+                hint: 'Ctrl+J'),
+            _item(context, '清除浏览数据', 'clear',
+                Icons.cleaning_services_outlined),
+          ],
+        ),
+        Builder(builder: (context) {
+          final config = context.watch<ConfigService>();
+          final ui = context.watch<BrowserUiState>();
+          return _Submenu(
+            icon: Icons.tune,
+            label: '显示',
+            children: [
+              _toggle(context, '显示书签栏', 'bookmarks_bar',
+                  config.showBookmarksBar,
+                  hint: 'Ctrl+Shift+B'),
+              _toggle(context, '自动嗅探媒体资源', 'sniff_auto', config.autoSniff),
+              _toggle(context, '启用 JavaScript', 'js', config.jsEnabled),
+              _toggle(context, '广告拦截', 'adblock', config.adBlockEnabled),
+              _toggle(context, '全屏', 'fullscreen', ui.fullscreen, hint: 'F11'),
+            ],
+          );
+        }),
+        _Submenu(
+          icon: Icons.build_outlined,
+          label: '工具',
+          children: [
+            _item(context, '扫一扫', 'scan', Icons.qr_code_scanner),
+            _item(context, '文字识别（图片取字）', 'ocr_text',
+                Icons.document_scanner_outlined),
+            _item(context, '分享', 'share', Icons.share),
+            _item(context, '开发者工具箱', 'devtools', Icons.developer_mode),
+            if (BuildFlavorInfo.current == BuildFlavor.full) ...[
+              _item(context, '内核管理', 'kernels', Icons.memory_outlined),
+              _item(context, '用户脚本', 'userscripts', Icons.code),
+            ],
+          ],
+        ),
+        _Submenu(
+          icon: Icons.settings_outlined,
+          label: '系统',
+          children: [
+            _item(context, '检查更新', 'check_update', Icons.system_update_alt),
+            _item(context, '设置', 'settings', Icons.settings),
+            _item(context, '关于 Zip Browser', 'about', Icons.info_outline),
+          ],
+        ),
+      ],
+      builder: (context, controller, child) => IconButton(
+        tooltip: '菜单',
+        splashRadius: 16,
+        icon: const Icon(Icons.more_vert, size: 20),
+        onPressed: () => controller.open(),
+      ),
+    );
+  }
 
-    return PopupMenuButton<String>(
-      tooltip: '菜单',
-      splashRadius: 16,
-      icon: const Icon(Icons.more_vert, size: 20),
-      onSelected: (value) => handleMainMenuAction(context, value),
-      itemBuilder: (_) => _popupItems(context, tm, config, tab),
+  Widget _item(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon, {
+    String? hint,
+    bool enabled = true,
+  }) {
+    return MenuItemButton(
+      onPressed: enabled ? () => handleMainMenuAction(context, value) : null,
+      leadingIcon: _LeadIcon(icon),
+      trailingIcon: hint == null
+          ? null
+          : Text(hint, style: TextStyle(fontSize: 11, color: context.zb.textFaint)),
+      child: Text(label,
+          style: TextStyle(fontSize: 13.5, color: context.zb.textPrimary)),
+    );
+  }
+
+  Widget _toggle(
+    BuildContext context,
+    String label,
+    String value,
+    bool checked, {
+    String? hint,
+  }) {
+    return MenuItemButton(
+      onPressed: () => handleMainMenuAction(context, value),
+      leadingIcon: Icon(
+        checked ? Icons.check_box : Icons.check_box_outline_blank,
+        size: 17,
+        color: checked ? Theme.of(context).colorScheme.primary : context.zb.textMuted,
+      ),
+      trailingIcon: hint == null
+          ? null
+          : Text(hint, style: TextStyle(fontSize: 11, color: context.zb.textFaint)),
+      child: Text(label,
+          style: TextStyle(fontSize: 13.5, color: context.zb.textPrimary)),
     );
   }
 }
 
-/// 主菜单条目模型（PopupMenu 与底部弹层共用）
+/// 二级菜单分组容器。
+class _Submenu extends StatelessWidget {
+  const _Submenu({
+    required this.icon,
+    required this.label,
+    required this.children,
+  });
+
+  final IconData icon;
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SubmenuButton(
+      menuChildren: children,
+      leadingIcon: Icon(icon, size: 17, color: context.zb.textMuted),
+      child: Text(label, style: TextStyle(fontSize: 13.5, color: context.zb.textPrimary)),
+    );
+  }
+}
+
+/// 菜单图标统一着色。
+class _LeadIcon extends StatelessWidget {
+  const _LeadIcon(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, size: 17, color: context.zb.textMuted);
+  }
+}
+
+/// 主菜单条目模型（底部弹层用；桌面端为二级菜单，见 [_MainMenuButton]）。
 class MainMenuEntry {
   final String value;
   final IconData icon;
@@ -177,12 +340,12 @@ List<MainMenuEntry> mainMenuEntries(
     const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
     // —— 工具 ——
     const MainMenuEntry('scan', Icons.qr_code_scanner, '扫一扫', dividerBefore: true),
+    const MainMenuEntry('ocr_text', Icons.document_scanner_outlined, '文字识别（图片取字）'),
     const MainMenuEntry('share', Icons.share, '分享'),
     // —— 系统 ——
     if (flavor == BuildFlavor.full) ...[
       const MainMenuEntry('kernels', Icons.memory_outlined, '内核管理',
           dividerBefore: true),
-      const MainMenuEntry('plugins', Icons.extension, '插件管理'),
       const MainMenuEntry('userscripts', Icons.code, '用户脚本'),
     ],
     const MainMenuEntry('devtools', Icons.developer_mode, '开发者工具箱',
@@ -191,54 +354,6 @@ List<MainMenuEntry> mainMenuEntries(
     const MainMenuEntry('settings', Icons.settings, '设置'),
     const MainMenuEntry('about', Icons.info_outline, '关于 Zip Browser'),
   ];
-}
-
-/// 把 [mainMenuEntries] 转成 PopupMenu 项（桌面/宽屏下拉菜单用）。
-List<PopupMenuEntry<String>> _popupItems(
-  BuildContext context,
-  TabManager tm,
-  ConfigService config,
-  TabModel? tab,
-) {
-  final entries = mainMenuEntries(context, tm: tm, config: config, tab: tab);
-  final items = <PopupMenuEntry<String>>[];
-  for (final e in entries) {
-    if (e.dividerBefore) items.add(const PopupMenuDivider(height: 1));
-    if (e.value == 'reopen') {
-      items.add(PopupMenuItem<String>(
-        value: e.value,
-        enabled: tm.canReopenClosedTab,
-        height: 38,
-        child: _MenuRow(e.icon, e.label, hint: e.hint),
-      ));
-      continue;
-    }
-    if (e.value == 'bookmarks_bar' ||
-        e.value == 'sniff_auto' ||
-        e.value == 'js' ||
-        e.value == 'adblock') {
-      final checked = switch (e.value) {
-        'bookmarks_bar' => config.showBookmarksBar,
-        'sniff_auto' => config.autoSniff,
-        'js' => config.jsEnabled,
-        'adblock' => config.adBlockEnabled,
-        _ => false,
-      };
-      items.add(CheckedPopupMenuItem<String>(
-        value: e.value,
-        checked: checked,
-        height: 38,
-        child: _MenuRow(e.icon, e.label, hint: e.hint),
-      ));
-      continue;
-    }
-    items.add(PopupMenuItem<String>(
-      value: e.value,
-      height: 38,
-      child: _MenuRow(e.icon, e.label, hint: e.hint),
-    ));
-  }
-  return items;
 }
 
 /// 处理主菜单动作（主菜单与底部导航共用）。
@@ -291,6 +406,11 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
       if (tab != null && context.mounted) {
         await _aiReadPage(context, tab);
       }
+    case 'ocr_text':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OcrPage()),
+      );
     case 'check_update':
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -347,11 +467,6 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
       if (!context.mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const KernelsPage()),
-      );
-    case 'plugins':
-      if (!context.mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const PluginsPage()),
       );
     case 'userscripts':
       if (!context.mounted) return;
@@ -447,7 +562,7 @@ Future<void> showAboutDialog(BuildContext context, TabManager tm) async {
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: ZbTokens.s4),
             Text(
-              '可通过 zip 插件扩展功能与内核\n'
+              '可通过独立内核包（.zbk）扩展浏览器内核\n'
               'Android: System WebView · Windows: WebView2\n'
               '当前平台：${Platform.operatingSystem}',
               textAlign: TextAlign.center,
@@ -491,6 +606,11 @@ Future<void> handlePageToolsAction(
       await _translatePage(context, tab);
     case 'ai_read':
       await _aiReadPage(context, tab);
+    case 'ocr_text':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OcrPage()),
+      );
   }
 }
 
@@ -695,7 +815,7 @@ Future<void> _confirmClear(BuildContext context, TabManager tm) async {
     },
   );
 
-  if (ok == true) {
+    if (ok == true) {
     await tm.clearBrowsingData(
         cookies: cookies, cache: cache, historyFlag: historyFlag);
     if (context.mounted) {
@@ -707,58 +827,3 @@ Future<void> _confirmClear(BuildContext context, TabManager tm) async {
   }
 }
 
-/// 已启用插件的工具栏按钮
-class _ExtensionButtons extends StatelessWidget {
-  const _ExtensionButtons();
-
-  @override
-  Widget build(BuildContext context) {
-    final pm = context.watch<PluginManager>();
-    final plugins = pm.toolbarPlugins();
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final plugin in plugins)
-          ZbToolButton(
-            size: 18,
-            icon: Icons.extension,
-            tooltip: '${plugin.manifest.name} v${plugin.manifest.version}',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content:
-                    Text('${plugin.manifest.name} v${plugin.manifest.version}'),
-                duration: const Duration(seconds: 1),
-              ));
-            },
-          ),
-      ],
-    );
-  }
-}
-
-class _MenuRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String? hint;
-  const _MenuRow(this.icon, this.label, {this.hint});
-
-  @override
-  Widget build(BuildContext context) {
-    final zb = context.zb;
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: zb.textMuted),
-        const SizedBox(width: ZbTokens.s5),
-        Expanded(
-          child: Text(label,
-              style: TextStyle(fontSize: 13.5, color: zb.textPrimary)),
-        ),
-        if (hint != null) ...[
-          const SizedBox(width: ZbTokens.s5),
-          Text(hint!, style: TextStyle(fontSize: 11, color: zb.textFaint)),
-        ],
-      ],
-    );
-  }
-}

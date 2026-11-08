@@ -296,7 +296,7 @@ jobs:
           $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup*' -Recurse -Filter ISCC.exe |
                   Select-Object -First 1
           if (-not $iscc) { throw '未找到 ISCC.exe' }
-          & $iscc.FullName ".tooling\installer.iss" "/DAppVersion=$ver" "/DFavor=${{ matrix.flavor }}"
+          & $iscc.FullName ".tooling\installer.iss" "/DAppVersion=$ver" "/DFlavor=${{ matrix.flavor }}"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 失败：$LASTEXITCODE" }
           Get-ChildItem dist | ForEach-Object {
             Write-Host ("  {0}  {1:N2} MB" -f $_.Name, ($_.Length/1MB))

@@ -1,5 +1,9 @@
 # 插件内核集成指南
 
+> **已下线（v0.12.0）**：zip 功能插件（含插件携带内核）的安装入口已随
+> v0.12.0 移除，独立内核统一走 [KERNEL_PACK.md](KERNEL_PACK.md) 的 `.zbk`
+> 内核包。本文档保留为历史版本参考与 FFI 加载器内部机制说明。
+
 本指南说明如何让“zip 插件携带的浏览器内核”在宿主中显示画面。
 
 系统内核（Android System WebView / Windows WebView2 Evergreen）**不需要**

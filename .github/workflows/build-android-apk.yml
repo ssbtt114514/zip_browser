@@ -1,6 +1,8 @@
 name: build-android-apk
 
-# 构建 Android 安装包（release APK，universal 单包 + 按 ABI 拆分包）。
+# 构建 Android 安装包（release APK，universal 单包 + 按 ABI 拆分包），
+# 覆盖三种构建风味：full=完整版 / single=单内核版 / none=无内核版
+# （--dart-define=ZIP_FLAVOR=...，见 lib/core/build_flavor.dart）。
 # 注意：android/ 工程（含相机 FileProvider 等原生定制）随仓库提交，
 #       CI 直接构建，不再 flutter create。
 #
@@ -26,8 +28,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apk:
-    name: Build Android APK
+  # 静态检查只跑一次（x64 风味的产物与风味无关）。
+  analyze:
+    name: Analyze
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +49,7 @@ jobs:
 
       # android/build.gradle.kts 已随仓库提交（compileSdk 36 + 子模块补丁，
       # 见 tool/patch_android_gradle.py 幂等生成）；以下步骤仅在骨架漂移时兜底。
-      - name: Patch Android Gradle (pin plugin compileSdk, idempotent)
+      - name: Patch Android Gradle (compileSdk / minSdk / ML Kit, idempotent)
         run: python3 tool/patch_android_gradle.py
 
       # flutter create 会补齐模板自带的 test/widget_test.dart（其中引用模板类 MyApp，
@@ -60,36 +63,74 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+  apk:
+    name: Build Android APK (${{ matrix.flavor }})
+    runs-on: ubuntu-latest
+    needs: [analyze]
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [full, single, none]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Patch Android Gradle (compileSdk / minSdk / ML Kit, idempotent)
+        run: python3 tool/patch_android_gradle.py
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
       # 按 CPU 架构拆分成 3 个安装包（arm64-v8a / armeabi-v7a / x86_64），
       # 体积更小；另产一个 universal 全架构包（单包兼容所有设备）。
       - name: Build split-per-abi APKs
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
 
       - name: Build universal APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
 
       - name: Collect APKs
         run: |
           set -euo pipefail
+          case "${{ matrix.flavor }}" in
+            single) SUFFIX="-single" ;;
+            none)   SUFFIX="-no-kernel" ;;
+            *)      SUFFIX="" ;;
+          esac
+          echo "SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
           mkdir -p dist
           src=build/app/outputs/flutter-apk
-          cp "$src/app-arm64-v8a-release.apk" dist/zip-browser-android-arm64-v8a.apk
-          cp "$src/app-armeabi-v7a-release.apk" dist/zip-browser-android-armeabi-v7a.apk
-          cp "$src/app-x86_64-release.apk" dist/zip-browser-android-x86_64.apk
-          cp "$src/app-release.apk" dist/zip-browser-android-universal.apk
+          cp "$src/app-arm64-v8a-release.apk" "dist/zip-browser-android-arm64-v8a$SUFFIX.apk"
+          cp "$src/app-armeabi-v7a-release.apk" "dist/zip-browser-android-armeabi-v7a$SUFFIX.apk"
+          cp "$src/app-x86_64-release.apk" "dist/zip-browser-android-x86_64$SUFFIX.apk"
+          cp "$src/app-release.apk" "dist/zip-browser-android-universal$SUFFIX.apk"
           ls -lh dist
 
       # 校验每个 APK 的 ABI 库与清单都在（而不是只检查"文件存在"）。
       - name: Verify APK contents
         run: |
           set -euo pipefail
+          export SUFFIX="$SUFFIX"
           python3 - <<'PY'
-          import zipfile
+          import os, zipfile
+          suffix = os.environ['SUFFIX']
+          base = f'dist/zip-browser-android-'
           checks = {
-            'dist/zip-browser-android-arm64-v8a.apk': 'lib/arm64-v8a/libapp.so',
-            'dist/zip-browser-android-armeabi-v7a.apk': 'lib/armeabi-v7a/libapp.so',
-            'dist/zip-browser-android-x86_64.apk': 'lib/x86_64/libapp.so',
-            'dist/zip-browser-android-universal.apk': 'lib/arm64-v8a/libapp.so',
+            f'{base}arm64-v8a{suffix}.apk': 'lib/arm64-v8a/libapp.so',
+            f'{base}armeabi-v7a{suffix}.apk': 'lib/armeabi-v7a/libapp.so',
+            f'{base}x86_64{suffix}.apk': 'lib/x86_64/libapp.so',
+            f'{base}universal{suffix}.apk': 'lib/arm64-v8a/libapp.so',
           }
           for path, need_lib in checks.items():
               with zipfile.ZipFile(path) as z:
@@ -102,7 +143,7 @@ jobs:
                       print(('[OK]   ' if ok else '[FAIL] '), need)
                       assert ok, f'{path}: 缺少 {need}'
           # universal 应包含全部三个 ABI
-          with zipfile.ZipFile('dist/zip-browser-android-universal.apk') as z:
+          with zipfile.ZipFile(f'{base}universal{suffix}.apk') as z:
               names = set(n for n in z.namelist() if n.startswith('lib/'))
               for abi in ('arm64-v8a', 'armeabi-v7a', 'x86_64'):
                   assert any(n.startswith(f'lib/{abi}/') for n in names), f'universal 缺 {abi}'
@@ -112,7 +153,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-android-apk
+          name: zip-browser-android-apk-${{ matrix.flavor }}
           path: dist/*.apk
           if-no-files-found: error
 

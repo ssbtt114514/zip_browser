@@ -41,7 +41,7 @@ class DevToolsPage extends StatelessWidget {
               _row('平台',
                   '${Platform.operatingSystem} ${Platform.operatingSystemVersion}'),
               _row('Dart 版本', Platform.version.split(' ').first),
-              _row('插件系统', BuildFlavorInfo.pluginSystemEnabled ? '启用' : '已移除'),
+              _row('插件系统', '已移除（v0.12.0）'),
               _row('内核管理', BuildFlavorInfo.kernelManagementEnabled ? '启用' : '已移除'),
             ],
           ),

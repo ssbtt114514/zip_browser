@@ -1,7 +1,9 @@
 name: build-linux
 
 # 构建 Linux 桌面版并打包：x64（ubuntu-latest）与 arm64/aarch64（ubuntu-24.04-arm
-# 原生 ARM 运行器）两个架构；每个架构产出 tar.gz 与 .deb 安装包。
+# 原生 ARM 运行器）两个架构，每个架构各产出三种构建风味
+# （full=完整版 / single=单内核版 / none=无内核版，--dart-define=ZIP_FLAVOR=...），
+# 每份产物包含 tar.gz 与 .deb 安装包。
 # Flutter 不支持交叉编译桌面版：Linux 产物只能在同架构 Linux 主机上构建，
 # 因此用 GitHub 的 amd64 / arm64 原生运行器分别构建。
 #
@@ -28,9 +30,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 静态检查与单元测试只在 x64 上跑一次：风味不影响分析结果，
+  # arm64 运行器拉起成本高，不再重复跑。
+  analyze:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev
+          sudo apt-get install -y libstdc++-12-dev || true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Generate Linux platform files
+        run: flutter create --platforms=linux --org com.zipbrowser --project-name zip_browser .
+
+      # flutter create 会补齐模板自带的 test/widget_test.dart（引用模板类 MyApp，
+      # 本项目并不存在），不删掉会让 analyze / test 直接编译失败。
+      - name: Remove template widget test
+        run: rm -f test/widget_test.dart
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Unit tests
+        run: flutter test --reporter expanded
+
   linux:
-    name: Build Linux ${{ matrix.label }}
+    name: Build Linux ${{ matrix.label }}-${{ matrix.flavor }}
     runs-on: ${{ matrix.runner }}
+    needs: [analyze]
     strategy:
       fail-fast: false
       matrix:
@@ -39,12 +84,40 @@ jobs:
             arch: amd64
             runner: ubuntu-latest
             flutter_version: 3.47.6
+            flavor: full
+            suffix: ''
+          - label: x64
+            arch: amd64
+            runner: ubuntu-latest
+            flutter_version: 3.47.6
+            flavor: single
+            suffix: '-single'
+          - label: x64
+            arch: amd64
+            runner: ubuntu-latest
+            flutter_version: 3.47.6
+            flavor: none
+            suffix: '-no-kernel'
           # GitHub 原生 ARM 运行器：subosito/flutter-action 在 arm64 上无法解析
           # 固定版本号（如 3.47.6），这里改用最新 stable。
           - label: aarch64
             arch: arm64
             runner: ubuntu-24.04-arm
             flutter_version: ''
+            flavor: full
+            suffix: ''
+          - label: aarch64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            flutter_version: ''
+            flavor: single
+            suffix: '-single'
+          - label: aarch64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            flutter_version: ''
+            flavor: none
+            suffix: '-no-kernel'
     steps:
       - uses: actions/checkout@v4
 
@@ -79,24 +152,14 @@ jobs:
       - name: Generate Linux platform files
         run: flutter create --platforms=linux --org com.zipbrowser --project-name zip_browser .
 
-      # flutter create 会补齐模板自带的 test/widget_test.dart（引用模板类 MyApp，
-      # 本项目并不存在），不删掉会让 analyze / test 直接编译失败。
       - name: Remove template widget test
         run: rm -f test/widget_test.dart
 
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
-
-      # 在 Linux 上再跑一遍单元测试：其中包含依赖 Platform.isLinux 的分支，
-      # Windows 运行器上跑不到。
-      - name: Unit tests
-        run: flutter test --reporter expanded
-
-      - name: Build Linux release
-        run: flutter build linux --release
+      - name: Build Linux release (${{ matrix.flavor }})
+        run: flutter build linux --release --dart-define=ZIP_FLAVOR=${{ matrix.flavor }}
 
       - name: Package tar.gz
         run: |
@@ -113,7 +176,7 @@ jobs:
           test -x "$bundle/zip_browser" || { echo "::error::未找到可执行文件 $bundle/zip_browser"; exit 1; }
           mkdir -p dist
           # 顶层放一个 bundle/ 目录，解包后不会把文件撒在当前目录里
-          tar -czf "dist/zip-browser-linux-${{ matrix.arch }}.tar.gz" \
+          tar -czf "dist/zip-browser-linux-${{ matrix.arch }}${{ matrix.suffix }}.tar.gz" \
               -C "$(dirname "$bundle")" "$(basename "$bundle")"
           ls -lh dist
 
@@ -124,7 +187,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import tarfile
-          path = 'dist/zip-browser-linux-${{ matrix.arch }}.tar.gz'
+          path = 'dist/zip-browser-linux-${{ matrix.arch }}${{ matrix.suffix }}.tar.gz'
           with tarfile.open(path) as t:
               names = t.getnames()
               print('tar 条目数：', len(names))
@@ -147,23 +210,23 @@ jobs:
           esac
           bundle=build/linux/$FLUTTER_ARCH/release/bundle
           VERSION=$(python3 -c "from pathlib import Path; l=[x for x in Path('pubspec.yaml').read_text().splitlines() if x.startswith('version:')][0]; print(l.split(':')[1].strip().split('+')[0])")
-          echo "打包版本：$VERSION · 架构：${{ matrix.arch }}"
+          echo "打包版本：$VERSION · 架构：${{ matrix.arch }} · 风味：${{ matrix.flavor }}"
           python3 tool/pack_deb.py "$bundle" \
-            "dist/zip-browser-linux-${{ matrix.arch }}.deb" \
+            "dist/zip-browser-linux-${{ matrix.arch }}${{ matrix.suffix }}.deb" \
             --version "$VERSION" --arch ${{ matrix.arch }}
 
       - name: Verify .deb
         run: |
           set -euo pipefail
-          dpkg-deb --info dist/zip-browser-linux-${{ matrix.arch }}.deb | head -20
+          dpkg-deb --info dist/zip-browser-linux-${{ matrix.arch }}${{ matrix.suffix }}.deb | head -20
           echo "--- 关键文件 ---"
-          dpkg-deb --contents dist/zip-browser-linux-${{ matrix.arch }}.deb | \
+          dpkg-deb --contents dist/zip-browser-linux-${{ matrix.arch }}${{ matrix.suffix }}.deb | \
             grep -E "usr/bin/zip-browser|libflutter|data/" | head -6
 
       - name: Upload Linux archives
         uses: actions/upload-artifact@v4
         with:
-          name: zip-browser-linux-${{ matrix.arch }}
+          name: zip-browser-linux-${{ matrix.arch }}-${{ matrix.flavor }}
           path: dist/*
           if-no-files-found: error
 

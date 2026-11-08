@@ -63,31 +63,15 @@ class UrlSuggestService {
     required this.searchTemplate,
   });
 
-  /// 输入是否「看起来像一个地址」（用于决定首条建议是直达还是搜索）
-  static bool looksLikeUrl(String input) {
-    final t = input.trim();
-    if (t.isEmpty) return false;
-    if (t.contains(' ')) return false;
-    const schemes = ['http://', 'https://', 'file://', 'about:', 'data:'];
-    for (final s in schemes) {
-      if (t.startsWith(s)) return true;
-    }
-    if (RegExp(r'^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$').hasMatch(t)) {
-      return true;
-    }
-    if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/.*)?$').hasMatch(t)) {
-      return true;
-    }
-    return RegExp(r'^([\w-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$',
-            caseSensitive: false)
-        .hasMatch(t);
-  }
+  /// 输入是否「看起来像一个地址」。
+  ///
+  /// 规则统一收敛在 [UrlInput.isLikelyUrl]，地址栏、建议列表、
+  /// 剪贴板识别共用同一套判定，避免三处规则逐渐漂移。
+  static bool looksLikeUrl(String input) => UrlInput.isLikelyUrl(input);
 
   /// 生成的搜索 URL
-  String searchUrl(String query) => searchTemplate().replaceFirst(
-        '{q}',
-        Uri.encodeQueryComponent(query),
-      );
+  String searchUrl(String query) =>
+      UrlInput.searchUrl(searchTemplate(), query);
 
   /// 生成建议列表。
   ///
@@ -115,7 +99,7 @@ class UrlSuggestService {
       return out;
     }
 
-    // 首条：直达 或 搜索
+    // 首条：直达；再看是否补一条同词搜索（地址型输入也能直接搜索）
     if (looksLikeUrl(q)) {
       final target = UrlInput.resolve(
         q,
@@ -128,6 +112,12 @@ class UrlSuggestService {
         url: target,
         kind: SuggestionKind.open,
       ));
+      push(UrlSuggestion(
+        text: q,
+        subtitle: '用默认搜索引擎搜索',
+        url: searchUrl(q),
+        kind: SuggestionKind.search,
+      ));
     } else {
       push(UrlSuggestion(
         text: q,
@@ -137,37 +127,57 @@ class UrlSuggestService {
       ));
     }
 
-    // 书签优先于历史
+    // 书签优先于历史；按匹配度（标题完全匹配 > 前缀 > 包含）与访问次数排序
     final lower = q.toLowerCase();
+    final bookmarkHits = <(int, int, Bookmark)>[];
     for (final b in bookmarks.items) {
-      if (out.length >= limit) break;
-      final title = b.title.toLowerCase();
-      final url = b.url.toLowerCase();
-      if (title.contains(lower) || url.contains(lower)) {
-        push(UrlSuggestion(
-          text: b.title.isEmpty ? b.url : b.title,
-          subtitle: b.url,
-          url: b.url,
-          kind: SuggestionKind.bookmark,
-        ));
-      }
+      final score = _matchScore(b.title, b.url, lower);
+      if (score > 0) bookmarkHits.add((score, 0, b));
+    }
+    bookmarkHits.sort((a, b) => b.$1.compareTo(a.$1));
+    for (final hit in bookmarkHits) {
+      final b = hit.$3;
+      push(UrlSuggestion(
+        text: b.title.isEmpty ? b.url : b.title,
+        subtitle: b.url,
+        url: b.url,
+        kind: SuggestionKind.bookmark,
+      ));
     }
 
+    final historyHits = <(int, int, HistoryEntry)>[];
     for (final e in history.entries) {
-      if (out.length >= limit) break;
-      if (lower.isEmpty) break;
-      final title = e.title.toLowerCase();
-      final url = e.url.toLowerCase();
-      if (title.contains(lower) || url.contains(lower)) {
-        push(UrlSuggestion(
-          text: e.title.isEmpty ? e.url : e.title,
-          subtitle: e.url,
-          url: e.url,
-          kind: SuggestionKind.history,
-        ));
-      }
+      final score = _matchScore(e.title, e.url, lower);
+      if (score > 0) historyHits.add((score, e.visits, e));
+    }
+    // 匹配度优先，其次访问次数（常用站点更容易被选中）
+    historyHits.sort((a, b) {
+      final byScore = b.$1.compareTo(a.$1);
+      if (byScore != 0) return byScore;
+      return b.$2.compareTo(a.$2);
+    });
+    for (final hit in historyHits) {
+      final e = hit.$3;
+      push(UrlSuggestion(
+        text: e.title.isEmpty ? e.url : e.title,
+        subtitle: e.url,
+        url: e.url,
+        kind: SuggestionKind.history,
+      ));
     }
 
     return out;
+  }
+
+  /// 匹配打分：0 表示不匹配；3=标题完全匹配，2=标题前缀，1=包含
+  static int _matchScore(String title, String url, String lowerQuery) {
+    if (lowerQuery.isEmpty) return 0;
+    final t = title.toLowerCase();
+    final u = url.toLowerCase();
+    if (t == lowerQuery) return 3;
+    if (t.startsWith(lowerQuery)) return 2;
+    if (t.contains(lowerQuery)) return 1;
+    if (u.contains(lowerQuery)) return 1;
+    return 0;
   }
 }

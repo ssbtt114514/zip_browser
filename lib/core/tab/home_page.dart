@@ -26,9 +26,12 @@ class HomePage {
     bool dark = false,
   }) {
     final qIndex = searchEngineTemplate.indexOf('{q}');
+    // 模板缺少 {q} 时（旧配置）退化为在末尾追加 q 参数，
+    // 与 UrlInput.searchUrl 的行为保持一致，避免关键词被静默丢弃。
+    final hasQuery = searchEngineTemplate.contains('?');
     final base = qIndex >= 0
         ? searchEngineTemplate.substring(0, qIndex)
-        : searchEngineTemplate;
+        : '${searchEngineTemplate}${hasQuery ? '&' : '?'}q=';
     final suffix = qIndex >= 0 ? searchEngineTemplate.substring(qIndex + 3) : '';
 
     final accentHex = _colorToHex(accentColor ?? const Color(0xFF0B84A5));
@@ -257,6 +260,22 @@ class HomePage {
     color: var(--accent);
     border-radius: 5px; padding: 1px 5px;
   }
+  /* 键盘操作可见性：Tab 聚焦搜索框时给出清晰描边 */
+  input:focus-visible { outline: none; }
+  button:focus-visible, .sc:focus-visible, .ri:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* 窄屏：收紧留白，按钮更紧凑，保证搜索框占满可用宽度 */
+  @media (max-width: 520px) {
+    body { padding: 0 14px 32px; }
+    header { padding: 34px 0 20px; }
+    .search { border-radius: 20px; padding: 6px 6px 6px 14px; }
+    input { font-size: 16px; padding: 10px 0; }
+    button { padding: 10px 16px; font-size: 14px; border-radius: 12px; }
+    .shortcuts { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+    .rh { display: none; }
+  }
   @keyframes rise {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: none; }
@@ -280,7 +299,8 @@ class HomePage {
           <circle cx="11" cy="11" r="7"></circle>
           <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
         </svg>
-        <input id="q" autofocus placeholder="搜索或输入网址" autocomplete="off"
+        <input id="q" placeholder="搜索或输入网址" autocomplete="off"
+               enterkeyhint="go" autocapitalize="off" autocorrect="off"
                spellcheck="false">
         <button type="submit">搜索</button>
       </div>
@@ -299,27 +319,64 @@ class HomePage {
       按 <kbd>Ctrl</kbd>+<kbd>T</kbd> 新建标签 ·
       <kbd>Ctrl</kbd>+<kbd>L</kbd> 聚焦地址栏 ·
       <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> 恢复关闭的标签<br>
-      内核与插件均可在应用内「内核管理 / 插件管理」中热插拔
+      可安装独立内核包（.zbk），在「内核管理」中切换或卸载
     </footer>
   </div>
 <script>
   var BASE = ${_jsString(base)};
   var SUFFIX = ${_jsString(suffix)};
   var input = document.getElementById('q');
-  document.getElementById('f').addEventListener('submit', function (e) {
+  var form = document.getElementById('f');
+
+  // 与 Dart 侧 UrlInput.isLikelyUrl 保持一致的判定顺序：
+  // scheme → 协议相对 → 含空白即搜索 → localhost/IP → 域名（可带端口）
+  function looksAddr(t) {
+    if (!t) return false;
+    if (/^(https?|ftp|file|data|about|blob|ws|wss):/i.test(t)) return true;
+    if (/^\\/\\//.test(t)) return true;
+    if (/\\s/.test(t)) return false;
+    if (/^localhost(:\\d{1,5})?([\\/?#].*)?$/i.test(t)) return true;
+    if (isIp(t)) return true;
+    return /^([a-zA-Z0-9_\\u4e00-\\u9fa5-]+\\.)+[a-zA-Z\\u4e00-\\u9fa5]{2,}(:\\d{1,5})?([\\/?#].*)?$/.test(t);
+  }
+
+  // IPv4：四段且每段 0-255（999.1.1.1 不当作地址）
+  function isIp(t) {
+    var m = /^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(:\\d{1,5})?([\\/?#].*)?$/.exec(t);
+    if (!m) return false;
+    for (var i = 1; i <= 4; i++) {
+      if (parseInt(m[i], 10) > 255) return false;
+    }
+    return true;
+  }
+
+  function isLocal(t) {
+    return /^localhost(:\\d{1,5})?([\\/?#].*)?$/i.test(t) || isIp(t);
+  }
+
+  // 去掉句末中英文标点后再补全 scheme
+  function open(t) {
+    t = t.replace(/[。，、！？；：,.!?;:]+$/, '');
+    if (/^[a-z][a-z0-9+.\\-]*:/i.test(t)) { location.href = t; return; }
+    if (t.indexOf('//') === 0) { location.href = 'https:' + t; return; }
+    if (isLocal(t)) { location.href = 'http://' + t; return; }
+    location.href = 'https://' + t;
+  }
+
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
     var q = input.value.trim();
-    if (!q) return;
-    // 看起来像地址就直接跳转，否则交给搜索引擎
-    if (/^(https?:\\/\\/|file:\\/\\/)/i.test(q)) { location.href = q; return; }
-    if (!/\\s/.test(q) && /^[\\w-]+(\\.[\\w-]+)+([\\/?#].*)?\$/.test(q)) {
-      location.href = 'https://' + q; return;
-    }
+    if (!q) { input.focus(); return; }
+    if (looksAddr(q)) { open(q); return; }
     location.href = BASE + encodeURIComponent(q) + SUFFIX;
   });
+
   document.addEventListener('keydown', function (e) {
-    if (e.key === '/' && document.activeElement !== input) {
+    if (e.key === '/' && !e.isComposing && document.activeElement !== input) {
       e.preventDefault(); input.focus();
+    }
+    if (e.key === 'Escape' && document.activeElement === input) {
+      input.blur();
     }
   });
 </script>

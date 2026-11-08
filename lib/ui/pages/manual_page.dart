@@ -33,7 +33,9 @@ class ManualPage extends StatelessWidget {
             title: '基础浏览',
             lines: [
               '顶部地址栏输入网址直接访问，输入关键词则用默认搜索引擎搜索。',
-              '地址栏输入时会给出历史 / 书签联想，↑ ↓ 选择、Enter 打开。',
+              '地址栏输入时会给出历史 / 书签联想，↑ ↓ 选择、Enter 打开、Tab 补全、Esc 收起。',
+              '聚焦地址栏会先列出最近访问；右侧 × 可一键清空输入。',
+              '粘贴的链接会自动去掉「」<> 等包裹符号与句末标点；带端口的域名、本机 IP、中文域名都能识别。',
               '地址栏左侧的锁图标可查看站点信息并调整本站缩放。',
               '标签栏可拖拽排序、固定标签、建标签组；菜单可恢复刚关闭的标签。',
               '菜单中可新建「隐私标签」，隐私标签不写入历史。',
@@ -89,20 +91,28 @@ class ManualPage extends StatelessWidget {
             ],
           ),
           _Block(
-            icon: Icons.extension,
-            title: '插件与内核',
+            icon: Icons.memory_outlined,
+            title: '内核',
             lines: [
-              '插件管理：安装 zip 功能插件（脚本扩展、界面扩展）。',
-              '内核管理：安装 .zbk 独立内核包，并在系统内核 / 插件内核间切换。',
+              '内核管理：安装 .zbk 独立内核包，并在系统内核 / 独立内核间切换。',
               '仓库自带「轻量文本内核」示例：真实抓取网页、解析 HTML、软件渲染上屏。',
-              '插件开发与内核 ABI 见仓库 docs/ 目录。',
+              '内核 ABI 与内核包制作见仓库 docs/ 目录。',
+            ],
+          ),
+          _Block(
+            icon: Icons.document_scanner_outlined,
+            title: '智能工具',
+            lines: [
+              '文字识别：选择图片取出文字（Android 内置离线识别，桌面走 AI 接口）。',
+              'AI 解读 / 翻译：需在「设置 → AI 解读」配置 OpenAI 兼容接口。',
+              '扫一扫：识别二维码与条码，链接直接打开。',
             ],
           ),
           _Block(
             icon: Icons.security,
             title: '隐私与安全',
             lines: [
-              '可在「内容与安全」中开关 JavaScript、设置受信任插件白名单。',
+              '可在「内容与安全」中开关 JavaScript。',
               '清除浏览数据：一键清理 Cookie、缓存与历史记录。',
             ],
           ),

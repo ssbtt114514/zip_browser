@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -76,5 +77,66 @@ class AiService {
         "return t.replace(/\\s+\\n/g,'\\n').slice(0,6000);})()";
     final raw = await evalJs(script);
     return (raw ?? '').trim();
+  }
+
+  /// AI 视觉取字：把图片交给多模态模型做文字识别（OCR）。
+  ///
+  /// 走 OpenAI 兼容的 chat/completions 多模态消息格式（image_url + base64），
+  /// 要求所配模型支持视觉输入（gpt-4o-mini / gpt-4o 等支持，
+  /// 纯文本模型如 deepseek-chat 会返回错误——如实展示，由用户换模型）。
+  static Future<String> ocrImage(
+    ConfigService config,
+    Uint8List bytes, {
+    String mime = 'image/png',
+  }) async {
+    final base = config.aiBaseUrl.trim().isEmpty
+        ? kDefaultBaseUrl
+        : config.aiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final model =
+        config.aiModel.trim().isEmpty ? kDefaultModel : config.aiModel.trim();
+    final key = config.aiApiKey.trim();
+
+    final resp = await http.post(
+      Uri.parse('$base/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $key',
+      },
+      body: jsonEncode({
+        'model': model,
+        'max_tokens': 2048,
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text': '请识别图片中的全部文字，按原始阅读顺序输出纯文本，'
+                    '保留换行；没有文字时回答「图片中没有文字」。',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:$mime;base64,${base64Encode(bytes)}',
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).timeout(const Duration(seconds: 90));
+
+    if (resp.statusCode != 200) {
+      throw Exception('AI 接口返回 ${resp.statusCode}：'
+          '${resp.body.length > 300 ? resp.body.substring(0, 300) : resp.body}');
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    final choices = data['choices'] as List?;
+    if (choices == null || choices.isEmpty) {
+      throw Exception('AI 接口未返回内容');
+    }
+    final msg = choices[0]['message']['content'];
+    return (msg is String) ? msg.trim() : jsonEncode(msg);
   }
 }

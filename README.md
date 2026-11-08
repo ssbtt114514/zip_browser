@@ -1,13 +1,15 @@
 # Zip Browser
 
-一个使用 **Flutter** 开发、可通过 **zip 插件**扩展功能与浏览器内核的多平台浏览器框架。
+一个使用 **Flutter** 开发、可通过**独立内核包（.zbk）**扩展浏览器内核的多平台浏览器框架。
 
-- ✅ **Android**：调用系统 **Android System WebView**（不打包内核，随系统更新）
+- ✅ **Android**：调用系统 **Android System WebView**（不打包内核，随系统更新）；
+  minSdk 21（Android 5.0，边界说明见
+  [docs/ANDROID_COMPAT.md](docs/ANDROID_COMPAT.md)）
 - ✅ **Windows**：使用 **WebView2**（Edge Chromium），支持系统 Evergreen 内核
-  与插件携带的 Fixed Version 固定内核
+  与内核包携带的 Fixed Version 固定内核
 - 🚧 **Linux / macOS**：架构已预留（占位内核），后续适配
-- 🔌 插件为标准 **zip**：JS 扩展（DOM/脚本）、原生内核（`.dll/.so`，C ABI）、
-  声明式 UI（按钮/菜单）；独立内核包为 **`.zbk`**
+- 📦 独立内核包为 **`.zbk`**；提供**完整版 / 单内核版 / 无内核版**三种构建风味
+- 🔌 zip 功能插件接口已于 **v0.12.0 移除**（历史版本说明见 Release）
 
 ## 功能特性
 
@@ -22,17 +24,22 @@
   折叠）、标签搜索面板、右键 / 长按菜单（复制标签、在右侧新建、关闭其他、
   关闭右侧、复制链接）。
 - **地址栏（Omnibox）**：胶囊输入框、可点击的安全状态胶囊（HTTPS / HTTP / 本地
-  文件 / 内置页，弹出站点信息与站点级缩放）、**本地联想下拉**（历史 + 书签 +
-  搜索 / 直达建议，支持 ↑ ↓ 选择、Enter 打开、Tab 补全、Esc 收起）、缩放倍率
-  胶囊。
+  文件 / 内置页，弹出站点信息与站点级缩放）、**本地联想下拉**（聚焦先列出最近
+  访问，输入后给出历史 + 书签 + 搜索 / 直达建议，支持 ↑ ↓ 选择、Enter 打开、
+  Tab 补全、Esc 分两级收起、一键清空）、缩放倍率胶囊。链接识别统一收敛在
+  `UrlInput`：大小写 scheme、协议相对地址、本机 IP 与端口、中文域名均可识别，
+  粘贴内容会自动剥离「」<> 等包裹符号与句末标点。
 - **书签栏**：地址栏下方一键开关（`Ctrl+Shift+B`），右键可"在新标签打开 /
   复制链接 / 删除"。
-- **主菜单**：按浏览器习惯重排为「标签 → 导航 → 数据 → 缩放 → 站点开关 →
-  工具 → 关于」，并标注对应快捷键。
-- **响应式**：宽度 < 720 时切换为紧凑布局（标签栏在工具栏下方、标签变窄）。
+- **主菜单**：桌面端重构为二级菜单——「标签页 / 页面 / 数据 / 显示 / 工具 /
+  系统」六组子菜单（MenuAnchor + SubmenuButton），开关项带勾选状态、
+  快捷键提示保留；窄屏底部面板为扁平分组。
+- **响应式**：宽度 < 720 时切换为紧凑布局（标签栏在工具栏下方、标签变窄），
+  地址栏在窄屏按宽度渐进隐藏缩放胶囊与书签星标，优先保证输入区空间。
 - **内置新标签页**：重新设计的 HTML 页面——图形标记 + 搜索卡片 + 常用站点宫格
   （字母头像按域名哈希取色）+ 最近访问列表，支持浅色 / 深色两套配色与
-  渐入动画，暗色主题跟随宿主设置。
+  渐入动画，暗色主题跟随宿主设置。搜索框与地址栏共用同一套链接判定，
+  `localhost:端口`、`192.168.x.x`、带端口的域名都会直接打开而不是去搜索。
 
 ### 浏览器能力
 
@@ -46,11 +53,17 @@
 - **资源嗅探**：自动嗅探页面视频 / 音频 / 图片，顶部浮动提示，可手动开关
 - **资源预览**：图片全屏缩放预览，视频 / 音频直接播放，一键下载
 - **二维码扫描**：扫一扫，识别 URL 直接打开
+- **文字识别（OCR）**：选图取字、一键复制；Android 内置 ML Kit 离线识别
+  （中文脚本，图片不上传），Windows / Linux 走 AI 解读配置的多模态接口
+- **AI 解读 / 翻译**：读取网页正文交给 OpenAI 兼容接口总结，Google 翻译
+  免费接口（失败回落 MyMemory）
 - **阅读模式**、无图模式、多组色彩滤镜、字号 / 行距调节
 - 桌面版 UA、长按菜单、分享、全屏
-- **莫奈动态取色（Material You）**：Android 12+ 跟随壁纸生成主题，可开关
+- **莫奈动态取色（Material You）**：Android 12+ 跟随壁纸生成主题，可开关；
+  其余平台由**内置莫奈引擎**（material_color_utilities HCT 调色板）从
+  主题种子色生成同款配色
 - 多搜索引擎、深色 / 浅色主题、自定义外观
-- SVG 应用图标，内核与插件均可热插拔
+- SVG 应用图标，独立内核包可热插拔
 
 ### 键盘快捷键
 
@@ -96,22 +109,19 @@ flutter run -d <android-device>   # Android
 flutter run -d windows            # Windows（需 Windows 主机 + WebView2 Runtime）
 ```
 
-### 3. 安装插件
+### 3. 安装内核包
 
-- 菜单（右上角 ⋮）→ **插件管理** → **安装 .zip**
-- 菜单 → **设置** → **浏览器内核** 可切换系统 / 插件内核（新标签页生效）
+- 菜单（右上角 ⋮）→ **工具 → 内核管理** → 安装 `.zbk` 独立内核包
+  （完整版风味）
+- 菜单 → **设置** → **浏览器内核** 可切换系统 / 独立内核（新标签页生效）
 
-### 4. 打包示例插件
+### 4. 打包独立内核包
 
 ```bash
-# JS 扩展示例（夜间模式）
-python tool/pack_plugin.py example_plugins/dark_mode
-
-# FFI 内核示例（需先按指南启用表面插件并编译 dll）
-python tool/pack_plugin.py example_plugins/hello_ffi_kernel
-
-# 独立内核包（.zbk）
-python tool/pack_kernel.py build_kernel_pkg/zb_example_standalone zip_browser_kernel.zbk
+# 轻量文本内核（C99 软件渲染）
+sh tool/build_lite_kernel.sh android-arm64-v8a   # 先构建平台库
+python tool/assemble_kernel_pkg.py
+python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_lite.zbk
 ```
 
 ### 5. 轻量文本内核（可直接使用的软件渲染内核）
@@ -129,7 +139,7 @@ sh tool/build_lite_kernel.sh selftest
 sh tool/build_lite_kernel.sh linux
 sh tool/build_lite_kernel.sh android-arm64-v8a    # 另有 armeabi-v7a / x86_64
 
-# 打包插件 / 独立内核包
+# 打包独立内核包
 python tool/pack_plugin.py example_plugins/lite_kernel
 
 # 独立内核包的 kernel.json 声明了 5 个平台，所以打包前要先把各平台产物
@@ -150,8 +160,7 @@ python tool/pack_kernel.py build_kernel_pkg/zb_lite_kernel zip_browser_kernel_li
 源码在 `native_kernels/zb_lite_kernel/`，设计与协议见
 **[docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)**。
 
-插件内核（让 zip 里的内核显示画面）的完整步骤见
-**[docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)**。
+内核包制作与宿主内核管理的契约见 **[docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)**。
 
 ### 6. 本地一键验证
 
@@ -200,7 +209,7 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 | [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android universal release APK（`dist/zip-browser-android-universal.apk`，内含 arm64-v8a / armeabi-v7a / x86_64）；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
 | [build-linux.yml](.github/workflows/build-linux.yml) | Linux x64 桌面版 `zip-browser-linux-x64.tar.gz`（先跑单元测试；tar 内容会校验可执行文件与 GTK 引擎库） |
 | [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号；产出 `lite_kernel.zip` / `hello_ffi_kernel.zip` / `zb_lite_kernel.zbk`，另加 `zb_chromium_kernel.zbk`（自带固定版本 Chromium 运行时）与 `zb_gecko_kernel.zbk`（Gecko 引擎适配包）；推 `v*` tag 时把这 5 个包挂到 Release |
-| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建 Windows release → 打包 `zip-browser-windows-x64.zip`；推 `v*` tag 时挂到 Release |
+| [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 编译内核 DLL → 构建三种风味的 Windows release（full / single / none，按 `ZIP_FLAVOR` 区分命名）→ 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |
 
 ### 8. 引擎内核包：Chromium 固定版本 / Gecko 适配包
 
@@ -238,28 +247,23 @@ dart run tool/verify_packages.dart zb_gecko_kernel.zbk
 
 ---
 
-## 插件能做什么
+## 内核包能做什么
 
 | 类型 | 说明 | 示例 |
 |------|------|------|
-| JS 扩展 | content script 注入页面，通过 `window.zipBrowser.call` 调用标签页/存储/下载等宿主 API | 夜间模式、去广告、翻译、脚本增强 |
-| 原生内核 | zip 携带 `.dll/.so`，遵循统一 C ABI，可替换渲染内核 | 固定版本 Chromium、自研内核、**轻量文本内核** |
-| UI 扩展 | 工具栏按钮、菜单项、popup 页面 | 扩展入口、工具弹窗 |
+| 独立内核包 `.zbk` | 携带原生内核库（`.dll/.so`，遵循统一 C ABI），安装后可替换系统内核渲染页面 | 固定版本 Chromium、**轻量文本内核** |
+| 引擎适配包 | 只探测本机引擎运行时并如实报告，不渲染 | Gecko 适配包 |
 
-插件权限（`tabs` / `storage` / `downloads` / `kernel` …）在 manifest 中声明，
-宿主按权限做 bridge 白名单；安装包做 SHA-256 指纹与目录防篡改校验。
-
-> 说明：Flutter release（AOT）模式不能运行时动态加载 Dart 代码，
-> 因此插件采用 JS + 原生库 + 声明式 UI 的组合，详见架构文档。
+> 说明：v0.11 及之前的 zip 功能插件接口（JS 扩展 / UI 扩展 / 插件携带内核）
+> 已在 v0.12.0 移除；历史版本的插件开发文档仍在仓库 docs/ 目录可查，
+> 但新版本不再提供安装入口。
 
 ---
 
 ## 文档
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：分层架构、内核抽象、
-  插件格式、bridge 与安全模型
-- [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md)：功能插件开发（结构、
-  `plugin.json`、`window.zipBrowser` JS API、用户脚本、打包）
+  内核包格式、bridge 与安全模型
 - [docs/KERNEL_PACK.md](docs/KERNEL_PACK.md)：独立内核包 `.zbk` 制作
 - [docs/KERNEL_ABI.md](docs/KERNEL_ABI.md)：原生内核 FFI C ABI（16 个导出符号）
 - [docs/KERNEL_LITE.md](docs/KERNEL_LITE.md)：轻量文本内核（zb_lite_kernel）
@@ -268,23 +272,23 @@ dart run tool/verify_packages.dart zb_gecko_kernel.zbk
   （`webview2_fixed`）的取料、装配、打包与宿主契约
 - [docs/KERNEL_ADAPTER.md](docs/KERNEL_ADAPTER.md)：Gecko 引擎适配包
   （`engine_adapter`）的语义、探测规则与"不渲染"的边界
-- [docs/PLUGIN_KERNEL_GUIDE.md](docs/PLUGIN_KERNEL_GUIDE.md)：
-  原生表面插件、FFI / Fixed Version 内核集成
+- [docs/ANDROID_COMPAT.md](docs/ANDROID_COMPAT.md)：Android 平台兼容性
+  （minSdk 21 的边界与 Android 4.x 的尝试结论）
 
 ## 目录
 
 ```text
-lib/core/       内核抽象 / 插件系统 / JS bridge / 标签页 / 主题引擎
+lib/core/       内核抽象 / 内核包机制 / JS bridge / 标签页 / 主题引擎
 lib/platform/   Android / Windows / FFI / 占位 内核实现
-lib/services/   配置 / 书签 / 历史 / 下载 / 缩放 / 会话 / 地址栏补全等
+lib/services/   配置 / 书签 / 历史 / 下载 / 缩放 / 会话 / OCR / AI / 翻译等
 lib/ui/         浏览器界面
   ├─ design/    设计令牌与语义色板（zb_design.dart）
   ├─ widgets/   标签栏 / 地址栏 / 联想下拉 / 工具栏 / 书签栏
   ├─ shortcuts/ 键盘快捷键与根焦点作用域
-  └─ pages/     设置、书签、历史、下载、内核与插件管理等页面
-native_plugins/ 插件内核所需的原生表面（纹理）
+  └─ pages/     设置、书签、历史、下载、内核管理等页面
+native_plugins/ 内核渲染所需的原生表面（纹理）
 native_kernels/ 原生内核源码（zb_lite_kernel：零依赖软件渲染内核）
-example_plugins/ 示例插件
+example_plugins/ 内核示例（FFI 内核 DLL 构建与集成测试用）
 build_kernel_pkg/ 独立内核包（.zbk）源目录
 tool/           初始化 / 打包 / 构建 / 集成脚本
 ```
