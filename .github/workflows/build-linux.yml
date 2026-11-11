@@ -139,14 +139,39 @@ jobs:
           channel: stable
           cache: true
 
-      # aarch64：subosito/flutter-action 无法在 arm64 解析任何版本，官方
-      # releases_linux.json 也只发布 x64 SDK；arm64 Linux 上官方推荐用 snap 安装。
-      - name: Setup Flutter via snap (aarch64)
+      # aarch64：官方 releases_linux.json 只发布 x64 SDK 包；snap 源
+      # （api.snapcraft.io）在 ARM 运行器上频繁超时/重置，因此直接克隆
+      # Flutter 仓库（版本与 x64 对齐）并触发首次运行下载引擎产物，
+      # 产物走 storage.googleapis.com，稳定性优于 snap。
+      - name: Setup Flutter via git (aarch64)
         if: matrix.flutter_version == ''
+        env:
+          FLUTTER_VERSION: 3.47.6
         run: |
-          sudo snap install flutter --classic
-          echo "/snap/bin" >> "$GITHUB_PATH"
-          flutter --version
+          set -euo pipefail
+          dest="$RUNNER_TEMP/flutter"
+          rm -rf "$dest"
+          for attempt in 1 2 3; do
+            if git clone --depth 1 --branch "$FLUTTER_VERSION" \
+                https://github.com/flutter/flutter.git "$dest"; then
+              break
+            fi
+            echo "第 $attempt 次克隆失败，30 秒后重试" >&2
+            sleep 30
+          done
+          echo "$dest/bin" >> "$GITHUB_PATH"
+          # 首次运行会下载 Dart SDK 与引擎产物，网络抖动同样做有限重试。
+          for attempt in 1 2 3; do
+            if "$dest/bin/flutter" --version; then
+              exit 0
+            fi
+            echo "第 $attempt 次初始化失败，30 秒后重试" >&2
+            sleep 30
+          done
+          exit 1
+
+      - name: Show Flutter version
+        run: flutter --version
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
