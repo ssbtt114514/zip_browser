@@ -39,6 +39,9 @@ env:
   LITE_DIR: native_kernels/zb_lite_kernel
   PKG: build_kernel_pkg/zb_gecko_kernel
 
+permissions:
+  contents: write
+
 jobs:
   # ---------------------------------------------------------------
   # 0) 端到端自检：gcc 编译内核 + 自检程序，证明内核能解析、排版、渲染
