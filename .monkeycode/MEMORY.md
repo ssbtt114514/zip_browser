@@ -57,3 +57,14 @@ Entries discovered by the Agent during task execution should follow this format:
   - Release 说明人工撰写在 `.tooling/release_notes_v*.md`（按版本号命名）；CI 的 gh-release 刻意不开 generate_release_notes，避免覆盖人工说明。
   - 版本号三处同步：pubspec.yaml `version: X.Y.Z+N`、lib/core/constants.dart `appVersion`、新增 `.tooling/release_notes_v*.md`。
   - 需求/设计规格沉淀在 `.monkeycode/specs/<日期-主题>/requirements.md + design.md`。
+
+[Project Knowledge Summary]
+- Date: 2026-11-11
+- Context: v0.12.3 发布期间排查 aarch64 构建与内核包挂 Release 的坑
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - aarch64 Linux 运行器上 snap 源（api.snapcraft.io）频繁超时/重置，Flutter 在 aarch64 的安装方式已改为 git clone 对应版本 tag + 首次运行下载产物（官方 releases_linux.json 只有 x64 SDK 包，flutter-action 在 arm64 也解析不了固定版本）。
+  - `rerun-failed-jobs` 复用触发运行时那次提交的工作流文件：如果失败原因是工作流本身的修改（如权限、步骤），必须重打 tag 或推新提交重新触发，重跑旧 run 无效。
+  - 工作流挂 Release（softprops/action-gh-release）必须显式声明 `permissions: contents: write`，缺省会报 "Resource not accessible by integration"。
+  - Flutter 3.47 起不再产出 32 位 x86 APK：Android 应用包按三 ABI（arm64-v8a / armeabi-v7a / x86_64）收集与校验；内核 .zbk 仍含四 ABI 库。
+  - Android 内核库统一按 NDK API 21（android21 三元组）编译，与 minSdk 21 对齐，保证 Gecko 风味在 Android 5.0+ 可加载；改 NDK_TRIPLES 时同步 docs/KERNEL_ABI.md 的示例。
