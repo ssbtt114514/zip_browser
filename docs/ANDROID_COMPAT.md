@@ -30,6 +30,9 @@ minSdk 已由 `tool/patch_android_gradle.py` 钉死为 21，防止模板默认�
 
 - **Android 5.0 – 7.1**：Chromium 风味可用；系统 WebView 由 Chrome 更新到 2021 前后
   的版本，多数网站可正常浏览。
+- **Gecko 风味（Android 5.0+）**：内核库按 NDK API 21 编译
+  （`tool/build_engine_kernels.py` 的 `NDK_TRIPLES`），与 minSdk 对齐，
+  随包内置的 `.zbk` 在 Android 5.0+ 首次启动即可安装使用。
 - **无内核版（ZIP_FLAVOR=none）**：同样受 Flutter 引擎 minSdk 21 约束，
   无法运行在 Android 4.x —— 该风味解决的是「分发体积 / 能力裁剪」，
   与系统版本下限无关。

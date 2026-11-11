@@ -116,8 +116,8 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      # 按 CPU 架构拆分成 4 个安装包（arm64-v8a / armeabi-v7a / x86 / x86_64），
-      # 体积更小；另产一个 universal 全架构包（单包兼容所有设备）。
+      # 按 CPU 架构拆分成 3 个安装包（arm64-v8a / armeabi-v7a / x86_64，
+      # Flutter 3.47 已不再产出 32 位 x86）；另产一个 universal 全架构包。
       # Gradle 首次构建要从 GitHub Releases 下载 Kotlin 编译器，偶发 504，
       # 因此两处构建都做有限重试。
       - name: Build split-per-abi APKs

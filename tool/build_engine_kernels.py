@@ -53,11 +53,14 @@ ENGINES = [
 ]
 
 ANDROID_ABIS = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
+# 统一按 API 21（Android 5.0）编译：与 app minSdk 对齐，内核库可以在
+# Android 5.0+ 上直接加载（此前按 API 24 编译，Android 5/6 设备会因
+# 缺少新版 bionic 符号而加载失败）。NDK r27+ 的最低支持级别即 21。
 NDK_TRIPLES = {
-    "arm64-v8a": "aarch64-linux-android24",
-    "armeabi-v7a": "armv7a-linux-androideabi24",
-    "x86": "i686-linux-android24",
-    "x86_64": "x86_64-linux-android24",
+    "arm64-v8a": "aarch64-linux-android21",
+    "armeabi-v7a": "armv7a-linux-androideabi21",
+    "x86": "i686-linux-android21",
+    "x86_64": "x86_64-linux-android21",
 }
 
 SOURCES = [

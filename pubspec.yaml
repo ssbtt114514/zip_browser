@@ -1,7 +1,7 @@
 name: zip_browser
 description: "可通过独立内核包扩展浏览器内核的多平台浏览器框架（Android / Windows / Linux，后续 macOS）"
 publish_to: "none"
-version: 0.12.2+19
+version: 0.12.3+20
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

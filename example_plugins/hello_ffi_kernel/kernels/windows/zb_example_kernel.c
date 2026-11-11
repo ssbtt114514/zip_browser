@@ -12,7 +12,7 @@
  * 编译（任选其一）：
  *   Windows : tool/build_example_kernel.bat（VS 开发者命令行 / LLVM）
  *   Android : $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang \
- *               --target=aarch64-linux-android24 -shared -fPIC -O2 \
+ *               --target=aarch64-linux-android21 -shared -fPIC -O2 \
  *               -I native_plugins/zb_native_surface/include \
  *               -o libzb_example_kernel.so zb_example_kernel.c
  *   Linux   : gcc -shared -fPIC -O2 -I native_plugins/zb_native_surface/include \

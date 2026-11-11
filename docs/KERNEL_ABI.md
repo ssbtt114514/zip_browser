@@ -69,13 +69,13 @@ typedef void (*zb_frame_submit_fn)(int64_t texture_id,
 
 ```bash
 $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang \
-  --target=aarch64-linux-android24 -shared -fPIC -O2 \
+  --target=aarch64-linux-android21 -shared -fPIC -O2 \
   -I native_plugins/zb_native_surface/include \
   -o libzb_example_kernel.so zb_example_kernel.c
-# --target 分别取：
-#   aarch64-linux-android24    -> arm64-v8a
-#   armv7a-linux-androideabi24 -> armeabi-v7a
-#   x86_64-linux-android24     -> x86_64
+# --target 分别取（与 app minSdk 21 / Android 5.0 对齐）：
+#   aarch64-linux-android21    -> arm64-v8a
+#   armv7a-linux-androideabi21 -> armeabi-v7a
+#   x86_64-linux-android21     -> x86_64
 ```
 
 **Linux**：
