@@ -68,3 +68,11 @@ Entries discovered by the Agent during task execution should follow this format:
   - 工作流挂 Release（softprops/action-gh-release）必须显式声明 `permissions: contents: write`，缺省会报 "Resource not accessible by integration"。
   - Flutter 3.47 起不再产出 32 位 x86 APK：Android 应用包按三 ABI（arm64-v8a / armeabi-v7a / x86_64）收集与校验；内核 .zbk 仍含四 ABI 库。
   - Android 内核库统一按 NDK API 21（android21 三元组）编译，与 minSdk 21 对齐，保证 Gecko 风味在 Android 5.0+ 可加载；改 NDK_TRIPLES 时同步 docs/KERNEL_ABI.md 的示例。
+
+[Project Knowledge Summary]
+- Date: 2026-11-12
+- Context: v0.13.0 发布前排查三平台构建同时失败
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - build-android-apk / build-linux / build-windows 的 analyze 与测试是各工作流前置 job：任一 `flutter test` 失败会让三个平台同时红，先看 analyze/test 日志再怀疑平台编译。
+  - 本地无 Flutter 时可用 `/tmp/opencode/dart_lex.py` 做词法层自检，但类型提升（跨无继承关系接口，如 `BrowserKernel` → `DebugLogSource`）必须显式 `as`，词法检查发现不了，需在 CI analyze 才暴露。
