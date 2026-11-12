@@ -8,6 +8,9 @@ import 'package:webview_flutter/webview_flutter.dart' hide WebResourceError;
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/bridge/find_script.dart';
+import '../core/debug/debug_injector.dart';
+import '../core/debug/debug_log.dart';
+import '../core/debug/debug_log_source.dart';
 import '../core/bridge/internal_dispatcher.dart';
 import '../core/bridge/js_bridge.dart';
 import '../core/desktop_mode_config.dart';
@@ -32,7 +35,7 @@ bool _looksLikeDownload(String url) {
 
 /// Android 系统内核：直接调用系统 Android System WebView
 /// （com.google.android.webview，由 webview_flutter_android 承载）
-class AndroidSystemKernel implements BrowserKernel {
+class AndroidSystemKernel implements BrowserKernel, DebugLogSource {
   WebViewController? _controller;
   List<UserScript> _scripts = const [];
   String? _currentUrl;
@@ -41,6 +44,7 @@ class AndroidSystemKernel implements BrowserKernel {
 
   late JsBridgeHub _bridge;
   final InternalDispatcher _internal = InternalDispatcher();
+  bool _debugInjection = false;
 
   final _nav = StreamController<NavigationEvent>.broadcast();
   final _progressC = StreamController<double>.broadcast();
@@ -72,6 +76,7 @@ class AndroidSystemKernel implements BrowserKernel {
   @override
   Future<void> initialize(KernelViewConfig config) async {
     _scripts = config.userScripts;
+    _debugInjection = config.debugInjection;
     _bridgeGlobalName = config.bridgeGlobalName;
     _bridge = JsBridgeHub(
       globalName: config.bridgeGlobalName,
@@ -175,6 +180,12 @@ class AndroidSystemKernel implements BrowserKernel {
     await controller.runJavaScript(_bridge.bootstrapScript());
     // 资源嗅探：hook fetch/XHR 必须早于页面脚本
     await controller.runJavaScript(ResourceSniffer.buildScript(_bridgeGlobalName));
+    // 调试钩子（设置开启时；控制台 / 异常 / 网络）
+    if (_debugInjection) {
+      await controller.runJavaScript(
+        DebugInjector.buildScript(bridgeGlobalName: _bridgeGlobalName),
+      );
+    }
     for (final script in _scripts) {
       if (script.timing == UserScriptInjectionTiming.documentStart &&
           script.matchesUrl(url)) {
@@ -233,6 +244,9 @@ class AndroidSystemKernel implements BrowserKernel {
   Future<bool> canGoBack() async => _controller?.canGoBack() ?? false;
   @override
   Future<bool> canGoForward() async => _controller?.canGoForward() ?? false;
+
+  @override
+  Stream<DebugLogEntry> get debugLogs => _internal.debugLogs;
 
   @override
   Future<String?> evaluateJavascript(String script) async {

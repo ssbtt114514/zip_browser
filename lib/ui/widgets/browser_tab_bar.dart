@@ -488,15 +488,27 @@ class _TabChipState extends State<_TabChip> {
                     color: scheme.primary,
                   ),
                 )
-              : ValueListenableBuilder<String>(
-                  valueListenable: tab.url,
-                  builder: (_, url, __) => Icon(
-                    _tabIcon(url, tab.isPrivate),
-                    size: 14,
-                    color: widget.selected
-                        ? scheme.primary.withValues(alpha: 0.9)
-                        : zb.textMuted,
-                  ),
+              : ValueListenableBuilder<bool>(
+                  valueListenable: tab.isSlept,
+                  builder: (_, slept, __) => slept
+                      ? Tooltip(
+                          message: '已休眠，切回时自动恢复',
+                          child: Icon(
+                            Icons.bedtime_outlined,
+                            size: 14,
+                            color: zb.textFaint,
+                          ),
+                        )
+                      : ValueListenableBuilder<String>(
+                          valueListenable: tab.url,
+                          builder: (_, url, __) => Icon(
+                            _tabIcon(url, tab.isPrivate),
+                            size: 14,
+                            color: widget.selected
+                                ? scheme.primary.withValues(alpha: 0.9)
+                                : zb.textMuted,
+                          ),
+                        ),
                 ),
         ),
         const SizedBox(width: ZbTokens.s4),

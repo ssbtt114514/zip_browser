@@ -29,6 +29,12 @@ class ThemeEngine {
       if (s.monetSource == MonetSource.system && monet != null) {
         return monet.toColorScheme(brightness: brightness);
       }
+      // 平台取色（Windows 强调色 / 壁纸主色）优先于手动种子色；
+      // builtin 源刻意忽略平台取色，保证「手动种子」语义。
+      final platformSeed = s.systemSeedOverride;
+      if (s.monetSource != MonetSource.builtin && platformSeed != null) {
+        return ZbMonetEngine.schemeFromSeed(platformSeed, brightness);
+      }
       // 内置莫奈引擎：所有平台可用，任意种子色生成莫奈色调
       return ZbMonetEngine.schemeFromSeed(s.seedColor, brightness);
     }
@@ -128,6 +134,43 @@ class ThemeEngine {
         indicatorSize: cupertino
             ? TabBarIndicatorSize.label
             : TabBarIndicatorSize.tab,
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        side: BorderSide.none,
+        backgroundColor: isDark
+            ? Colors.white.withValues(alpha: 0.10)
+            : Colors.black.withValues(alpha: 0.05),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radius),
+          ),
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cupertino ? 4 : 2),
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        visualDensity: VisualDensity.compact,
+      ),
+      sliderTheme: SliderThemeData(
+        trackHeight: 3,
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        linearMinHeight: 3,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 68,
+        backgroundColor: isDark ? const Color(0xFF1A1D22) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
       cardTheme: CardThemeData(
         elevation: 0,

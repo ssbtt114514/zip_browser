@@ -9,6 +9,7 @@ import '../../services/config_service.dart';
 import '../../services/ui_state.dart';
 import '../omnibox_controller.dart';
 import '../pages/bookmarks_page.dart';
+import '../pages/debugger_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
 import 'browser_focus.dart';
@@ -106,6 +107,13 @@ Map<ShortcutActivator, VoidCallback> browserShortcutBindings(
     const SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
       active()?.kernel.reload();
     },
+    const SingleActivator(LogicalKeyboardKey.f12): () {
+      if (!config.devToolsEnabled) {
+        toast('请先在设置中开启「允许开发者工具」');
+        return;
+      }
+      openPage(const DebuggerPage());
+    },
     const SingleActivator(LogicalKeyboardKey.keyR,
         control: true, shift: true): () async {
       final tab = active();
@@ -190,9 +198,7 @@ Map<ShortcutActivator, VoidCallback> browserShortcutBindings(
     const SingleActivator(LogicalKeyboardKey.f11): () {
       ui.toggleFullscreen();
     },
-    const SingleActivator(LogicalKeyboardKey.f12): () {
-      toast('当前内核未提供开发者工具');
-    },
+
   };
 
   // —— 按序号切换标签（Ctrl+1..8 → 第 1..8 个）——

@@ -14,6 +14,7 @@ import '../../services/history_service.dart';
 import '../../services/paths.dart';
 import 'appearance_page.dart';
 import 'desktop_mode_page.dart';
+import 'debugger_page.dart';
 import 'devtools_page.dart';
 import 'home_settings_page.dart';
 import 'reading_page.dart';
@@ -200,6 +201,28 @@ class SettingsPage extends StatelessWidget {
                     onChanged: config.setAdBlockEnabled,
                   ),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('允许开发者工具',
+                      style: TextStyle(fontSize: 13.5)),
+                  subtitle: const Text('注入控制台/网络钩子，开放页面调试面板与 F12',
+                      style: TextStyle(fontSize: 11.5)),
+                  trailing: AdaptiveSwitch(
+                    value: config.devToolsEnabled,
+                    onChanged: config.setDevToolsEnabled,
+                  ),
+                ),
+                if (config.devToolsEnabled) ...[
+                  const Divider(height: 1),
+                  _NavTile(
+                    icon: Icons.terminal,
+                    title: '页面调试面板',
+                    subtitle: '控制台 / 网络 / 执行 JS / 页面信息',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const DebuggerPage()),
+                    ),
+                  ),
+                ],
                 if (config.adBlockEnabled) ...[
                   const Divider(height: 1),
                   _NavTile(
@@ -236,6 +259,64 @@ class SettingsPage extends StatelessWidget {
              ),
            ),
            const SizedBox(height: 20),
+
+          // —— 性能 ——
+          const _SectionTitle('性能'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('网页访问优化',
+                      style: TextStyle(fontSize: 13.5)),
+                  subtitle: const Text('DNS 预取 / 预连接 / 首屏图片优先级提示',
+                      style: TextStyle(fontSize: 11.5)),
+                  trailing: AdaptiveSwitch(
+                    value: config.webTuningEnabled,
+                    onChanged: config.setWebTuningEnabled,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('后台标签休眠',
+                      style: TextStyle(fontSize: 13.5)),
+                  subtitle: Text(
+                    '空闲 ${config.tabSleepMinutes} 分钟且标签较多时卸载页面，切回时恢复',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  trailing: AdaptiveSwitch(
+                    value: config.tabSleepEnabled,
+                    onChanged: config.setTabSleepEnabled,
+                  ),
+                ),
+                if (config.tabSleepEnabled) ...[
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Row(
+                      children: [
+                        const Text('空闲阈值', style: TextStyle(fontSize: 12.5)),
+                        Expanded(
+                          child: Slider(
+                            value: config.tabSleepMinutes.toDouble(),
+                            min: 1,
+                            max: 60,
+                            divisions: 59,
+                            label: '${config.tabSleepMinutes} 分钟',
+                            onChanged: (v) =>
+                                config.setTabSleepMinutes(v.round()),
+                          ),
+                        ),
+                        Text('${config.tabSleepMinutes} 分钟',
+                            style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
           // —— AI 解读 ——
           const _SectionTitle('AI 解读'),

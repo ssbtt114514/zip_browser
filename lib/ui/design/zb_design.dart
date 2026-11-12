@@ -38,6 +38,13 @@ class ZbTokens {
   /// 工具按钮触区
   static const double toolButtonSize = 36;
 
+  // —— 圆角 ——
+  static const double radiusXs = 6;
+  static const double radiusS = 8;
+  static const double radiusM = 12;
+  static const double radiusL = 16;
+  static const double radiusXl = 20;
+
   // —— 间距 ——
   static const double s1 = 2;
   static const double s2 = 4;

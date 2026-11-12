@@ -61,6 +61,12 @@ native_kernels/zb_lite_kernel      零依赖 C99 软件渲染内核
     `hairline` / `hover` / `pressed` / `secure` / `privateSurface` …），
     经 `context.zb` 取用。所有外壳组件只引用语义色，颜色随深色模式与
     莫奈动态取色实时联动。
+  - Material 3 组件主题统一在 `theme_engine.dart` 集中定义（按钮 / 卡片 /
+    对话框 / Chip / SegmentedButton / NavigationBar / 进度与滑块），
+    圆角取自 `ZbTokens.radius*`。
+  - 取色源 `MonetSource`：`system`（Android 12+ 系统色板 / Windows 强调色）、
+    `wallpaper`（Windows 壁纸主色，失败回退强调色）、`builtin`（手动种子色）。
+    运行期覆盖色经 `AppearanceSettings.systemSeedOverride` 进入 `ThemeEngine`。
 - `ZbColors` 的正确性由 `test/ui_design_test.dart` 锁死：断言深色主题下
   标签栏 / 工具栏亮度 < 0.2、浅色主题 > 0.6、活动标签与外壳存在层次差、
   地址栏文字与底色对比度达标等。

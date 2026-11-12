@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../debug/debug_log.dart';
 import '../kernel/browser_kernel.dart';
 import '../sniff/sniff_model.dart';
 
@@ -24,11 +25,16 @@ class InternalDispatcher {
   final StreamController<List<SniffedResource>> sniffCtrl =
       StreamController<List<SniffedResource>>.broadcast();
 
+  /// 页面调试日志（控制台 / 异常 / 网络）
+  final StreamController<DebugLogEntry> debugCtrl =
+      StreamController<DebugLogEntry>.broadcast();
+
   Stream<ContextMenuInfo> get contextMenu => contextMenuCtrl.stream;
   Stream<String> get downloads => downloadCtrl.stream;
   Stream<String> get userscriptDetected => userscriptDetectedCtrl.stream;
   Stream<List<String>> get userscriptList => userscriptListCtrl.stream;
   Stream<List<SniffedResource>> get sniffedResources => sniffCtrl.stream;
+  Stream<DebugLogEntry> get debugLogs => debugCtrl.stream;
 
   /// 返回 true：internal 消息已处理；false：是普通插件消息
   bool dispatch(String raw) {
@@ -65,6 +71,14 @@ class InternalDispatcher {
         final list = jsonDecode(payload.substring(15)) as List;
         final urls = list.whereType<String>().toList();
         if (urls.isNotEmpty) userscriptListCtrl.add(urls);
+      } catch (_) {}
+    } else if (payload is String && payload.startsWith('debug:')) {
+      try {
+        final decoded = jsonDecode(payload.substring(6));
+        if (decoded is Map) {
+          final entry = DebugLogEntry.fromJson(decoded);
+          if (entry != null) debugCtrl.add(entry);
+        }
       } catch (_) {}
     } else if (payload is String && payload.startsWith('sniff:')) {
       try {

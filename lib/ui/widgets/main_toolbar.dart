@@ -17,6 +17,7 @@ import '../../services/translate_service.dart';
 import '../../services/ui_state.dart';
 import '../design/zb_design.dart';
 import '../pages/bookmarks_page.dart';
+import '../pages/debugger_page.dart';
 import '../pages/devtools_page.dart';
 import '../pages/downloads_page.dart';
 import '../pages/history_page.dart';
@@ -345,6 +346,8 @@ List<MainMenuEntry> mainMenuEntries(
           dividerBefore: true),
     const MainMenuEntry('devtools', Icons.developer_mode, '开发者工具箱',
         dividerBefore: true),
+    if (config.devToolsEnabled)
+      const MainMenuEntry('debugger', Icons.terminal, '页面调试', hint: 'F12'),
     const MainMenuEntry('check_update', Icons.system_update_alt, '检查更新'),
     const MainMenuEntry('settings', Icons.settings, '设置'),
     const MainMenuEntry('about', Icons.info_outline, '关于 Zip Browser'),
@@ -428,6 +431,11 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
       if (!context.mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const DevToolsPage()),
+      );
+    case 'debugger':
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const DebuggerPage()),
       );
     case 'zoom_in':
       await tm.zoomIn();

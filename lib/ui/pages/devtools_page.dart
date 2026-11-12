@@ -16,6 +16,7 @@ import '../../services/bookmarks_service.dart';
 import '../../services/history_service.dart';
 import '../../services/paths.dart';
 import '../design/zb_design.dart';
+import 'debugger_page.dart';
 import 'update_dialog.dart';
 
 /// 开发者工具箱：构建信息、内核诊断、数据目录、崩溃日志与数据导出入口。
@@ -63,6 +64,14 @@ class DevToolsPage extends StatelessWidget {
           _Card(
             title: '工具',
             children: [
+              ListTile(
+                leading: const Icon(Icons.terminal),
+                title: const Text('页面调试面板'),
+                subtitle: Text(config.devToolsEnabled
+                    ? '控制台 / 网络 / 执行 JS / 页面信息'
+                    : '需先在设置中开启「允许开发者工具」'),
+                onTap: () => _openDebugger(context, config),
+              ),
               ListTile(
                 leading: const Icon(Icons.system_update_alt),
                 title: const Text('检查更新'),
@@ -118,6 +127,19 @@ class DevToolsPage extends StatelessWidget {
           const SizedBox(height: ZbTokens.s6),
         ],
       ),
+    );
+  }
+
+  void _openDebugger(BuildContext context, ConfigService config) {
+    final navigator = Navigator.of(context);
+    if (!config.devToolsEnabled) {
+      messengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('请先在设置中开启「允许开发者工具」')),
+      );
+      return;
+    }
+    navigator.push(
+      MaterialPageRoute(builder: (_) => const DebuggerPage()),
     );
   }
 

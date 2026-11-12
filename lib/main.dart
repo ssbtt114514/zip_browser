@@ -12,6 +12,7 @@ import 'core/tab/tab_manager.dart';
 import 'core/script/userscript_manager.dart';
 import 'core/theme/appearance_settings.dart';
 import 'core/theme/theme_engine.dart';
+import 'platform/windows_theme_bootstrap.dart';
 import 'services/bundled_kernel_seeder.dart';
 import 'services/bookmarks_service.dart';
 import 'services/config_service.dart';
@@ -70,6 +71,9 @@ Future<void> _runApp() async {
 
   // 2b. 外观设置
   final appearance = await AppearanceSettings.create();
+
+  // 2b-1. Windows 系统取色（强调色 / 壁纸主色）；其他平台直接返回
+  await WindowsThemeBootstrap.apply(appearance);
 
   // 2b-2. 莫奈动态色板（Android 12+，其他平台返回 null）
   // 失败时静默降级（取不到色板不影响启动）

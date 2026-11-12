@@ -21,7 +21,15 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
+
+// 读取系统主题所需：DWM 强调色、注册表深色模式偏好。
+// advapi32 通过 pragma 引入，避免改动 runner 的 CMake 链接列表。
+#include <dwmapi.h>
+
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "dwmapi.lib")
 
 namespace {
 
@@ -80,6 +88,56 @@ int64_t ReadInt(const EncodableMap& map, const char* key) {
   return 0;
 }
 
+// 读取注册表 DWORD（失败返回 false）。
+bool ReadRegDword(HKEY root, const wchar_t* subkey, const wchar_t* name,
+                  DWORD* out) {
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(root, subkey, 0, KEY_READ, &key) != ERROR_SUCCESS) {
+    return false;
+  }
+  DWORD type = 0;
+  DWORD size = sizeof(DWORD);
+  DWORD value = 0;
+  const LONG rc =
+      RegQueryValueExW(key, name, nullptr, &type,
+                       reinterpret_cast<LPBYTE>(&value), &size);
+  RegCloseKey(key);
+  if (rc != ERROR_SUCCESS || type != REG_DWORD) return false;
+  *out = value;
+  return true;
+}
+
+// 系统强调色：DwmGetColorizationColor 返回 0xAABBGGRR（低字节为 R）。
+bool ReadAccentColor(uint32_t* argb) {
+  DWORD color = 0;
+  BOOL opaque_blend = FALSE;
+  if (FAILED(DwmGetColorizationColor(&color, &opaque_blend))) return false;
+  if ((color & 0x00FFFFFF) == 0) return false;
+  const uint32_t r = color & 0xFF;
+  const uint32_t g = (color >> 8) & 0xFF;
+  const uint32_t b = (color >> 16) & 0xFF;
+  *argb = 0xFF000000u | (r << 16) | (g << 8) | b;
+  return true;
+}
+
+// 桌面壁纸路径：优先 SPI 返回值，为空时回退主题缓存文件。
+bool ReadWallpaperPath(std::wstring* out) {
+  constexpr UINT kMaxPath = 1024;
+  wchar_t path[kMaxPath] = {0};
+  if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, kMaxPath, path, 0) &&
+      path[0] != L'\0') {
+    *out = path;
+    return true;
+  }
+  wchar_t appdata[MAX_PATH] = {0};
+  const DWORD n = GetEnvironmentVariableW(
+      L"APPDATA", appdata, static_cast<DWORD>(std::size(appdata)));
+  if (n == 0 || n >= std::size(appdata)) return false;
+  *out = std::wstring(appdata) +
+         L"\\Microsoft\\Windows\\Themes\\TranscodedWallpaper";
+  return true;
+}
+
 class NativeSurfacePlugin : public flutter::Plugin {
  public:
   explicit NativeSurfacePlugin(flutter::PluginRegistrarWindows* registrar)
@@ -121,12 +179,60 @@ class NativeSurfacePlugin : public flutter::Plugin {
     } else if (call.method_name() == "destroySurface") {
       DestroySurface(ReadInt(args, "textureId"));
       result->Success();
+    } else if (call.method_name() == "readSystemTheme") {
+      ReadSystemTheme(std::move(result));
     } else {
       result->NotImplemented();
     }
   }
 
  private:
+  // 读取 Windows 系统主题：强调色 / 深色偏好 / 壁纸路径。
+  // 任一项读取失败时对应字段返回 null，由 Dart 侧决定降级策略。
+  void ReadSystemTheme(std::unique_ptr<flutter::MethodResult<EncodableValue>>
+                           result) {
+    EncodableMap theme;
+
+    uint32_t accent = 0;
+    if (ReadAccentColor(&accent)) {
+      theme[EncodableValue("accentColor")] =
+          EncodableValue(static_cast<int64_t>(accent));
+    } else {
+      theme[EncodableValue("accentColor")] = EncodableValue();
+    }
+
+    DWORD apps_use_light = 1;
+    const bool has_theme = ReadRegDword(
+        HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme", &apps_use_light);
+    theme[EncodableValue("darkMode")] =
+        EncodableValue(has_theme ? (apps_use_light == 0) : false);
+
+    std::wstring wallpaper;
+    if (ReadWallpaperPath(&wallpaper)) {
+      theme[EncodableValue("wallpaperPath")] =
+          EncodableValue(Utf8FromWide(wallpaper));
+    } else {
+      theme[EncodableValue("wallpaperPath")] = EncodableValue();
+    }
+
+    result->Success(EncodableValue(theme));
+  }
+
+  static std::string Utf8FromWide(const std::wstring& wide) {
+    if (wide.empty()) return std::string();
+    const int size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(),
+                                         static_cast<int>(wide.size()),
+                                         nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return std::string();
+    std::string out(static_cast<size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(),
+                        static_cast<int>(wide.size()), out.data(), size,
+                        nullptr, nullptr);
+    return out;
+  }
+
   void CreateSurface(const EncodableMap& args,
                      std::unique_ptr<flutter::MethodResult<EncodableValue>>
                          result) {

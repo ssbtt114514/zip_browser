@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/ad_blocker_service.dart';
+import '../../services/web_font_injector.dart';
+import '../../services/webview_tuning.dart';
 import '../../services/bookmarks_service.dart';
 import '../../services/config_service.dart';
 import '../../services/desktop_mode_config.dart';
@@ -19,6 +21,7 @@ import '../../services/zoom_service.dart';
 import '../constants.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
+import 'tab_memory_policy.dart';
 import '../plugin/plugin_manager.dart';
 import '../sniff/sniff_model.dart';
 import '../script/userscript_manager.dart';
@@ -67,6 +70,18 @@ class TabManager extends ChangeNotifier {
 
   /// 会话快照写入的防抖计时器
   Timer? _sessionTimer;
+
+  /// 后台标签休眠扫描计时器
+  Timer? _sleepTimer;
+
+  /// 休眠前等待恢复的快照（tabId → 快照）
+  final Map<String, Map<String, dynamic>> _pendingRestore = {};
+
+  /// 上一个处于前台的标签（用于计算空闲时长）
+  TabModel? _lastActiveTab;
+
+  /// 休眠扫描是否进行中（避免慢速扫描与下一次定时触发叠加）
+  bool _sleepSweeping = false;
 
   /// 恢复关闭标签页的栈上限
   static const int _maxClosedStack = 25;
@@ -122,6 +137,7 @@ class TabManager extends ChangeNotifier {
     for (final t in _tabs) {
       t.kernel.setJavaScriptEnabled(config.jsEnabled);
     }
+    _ensureSleepTimer();
   }
 
   List<TabModel> get tabs => List.unmodifiable(_tabs);
@@ -360,6 +376,7 @@ class TabManager extends ChangeNotifier {
       final idx = _tabs.indexOf(previous);
       if (idx >= 0) _activeIndex = idx;
     }
+    _syncActiveState();
     notifyListeners();
 
     try {
@@ -417,12 +434,34 @@ class TabManager extends ChangeNotifier {
     if (config.adBlockEnabled) {
       scripts = [adBlocker?.buildUserScript(), ...scripts].whereType<UserScript>().toList();
     }
+    // 网页访问优化：预连接 / 首屏资源优先级提示
+    if (config.webTuningEnabled) {
+      scripts = [
+        WebViewTuning.priorityHintScript(),
+        WebViewTuning.preconnectScript(),
+        ...scripts,
+      ];
+    }
+    // 网页字体覆盖（与界面字体分离；留空则跟随页面）
+    final webFont =
+        WebFontInjector.buildScript(appearance?.webFontFamily ?? '');
+    if (webFont != null) {
+      scripts = [
+        UserScript(
+          timing: UserScriptInjectionTiming.documentStart,
+          matches: const ['*'],
+          source: webFont,
+        ),
+        ...scripts,
+      ];
+    }
     final granted = pluginManager.grantedBridgeMethods();
 
     await tab.kernel.initialize(KernelViewConfig(
       tabId: tab.id,
       userScripts: scripts,
       allowedBridgeMethods: granted,
+      debugInjection: config.devToolsEnabled,
     ));
 
     tab.kernel.bridge.registerAll(hostApi.handlers());
@@ -473,6 +512,8 @@ class TabManager extends ChangeNotifier {
 
   void _wireStreams(TabModel tab) {
     tab.kernel.urlChanges.listen((u) {
+      // 休眠时页面被卸载为空白页：保留快照 URL，供标签栏与会话继续显示
+      if (tab.isSlept.value && (u.isEmpty || u == 'about:blank')) return;
       tab.url.value = u;
       _scheduleSessionSave();
     });
@@ -505,6 +546,19 @@ class TabManager extends ChangeNotifier {
           webEnhance?.applyTo(tab.kernel) ?? Future.value(),
           applyZoom(tab),
         ]);
+        // 休眠标签唤醒：页面加载完成后恢复滚动位置与表单值
+        final pending = _pendingRestore.remove(tab.id);
+        if (pending != null) {
+          tab.isSlept.value = false;
+          await tab.kernel.evaluateJavascript(
+            TabMemoryPolicy.restoreScript(
+              scrollX: (pending['scrollX'] as num?)?.toDouble() ?? 0,
+              scrollY: (pending['scrollY'] as num?)?.toDouble() ?? 0,
+              values: (pending['values'] as Map?)?.cast<String, dynamic>() ??
+                  const {},
+            ),
+          );
+        }
         // 自动资源嗅探：稍等资源上报后汇总，发现媒体则提示
         if (config.autoSniff) _scheduleSniffHint(tab);
         _scheduleSessionSave();
@@ -630,6 +684,7 @@ class TabManager extends ChangeNotifier {
       _activeIndex = math.max(0, _activeIndex - 1);
     }
     if (_activeIndex >= _tabs.length) _activeIndex = _tabs.length - 1;
+    _syncActiveState();
     notifyListeners();
     _scheduleSessionSave();
   }
@@ -652,6 +707,7 @@ class TabManager extends ChangeNotifier {
       _normalizeOrder();
       _activeIndex = _tabs.indexOf(tab);
     }
+    _syncActiveState();
     notifyListeners();
     return tab;
   }
@@ -692,6 +748,7 @@ class TabManager extends ChangeNotifier {
       _normalizeOrder();
       _activeIndex = _tabs.indexOf(tab);
     }
+    _syncActiveState();
     notifyListeners();
     return tab;
   }
@@ -710,16 +767,103 @@ class TabManager extends ChangeNotifier {
     return tab;
   }
 
+  /// 记录激活变化：更新空闲计时、唤醒休眠标签、维护扫描计时器
+  void _syncActiveState() {
+    final current = active;
+    if (!identical(current, _lastActiveTab)) {
+      _lastActiveTab?.lastActiveAt = DateTime.now();
+      _lastActiveTab = current;
+      if (current != null) {
+        current.lastActiveAt = DateTime.now();
+        _wakeIfSlept(current);
+      }
+    }
+    _ensureSleepTimer();
+  }
+
+  /// 切回休眠标签：登记快照并重新加载原页面
+  void _wakeIfSlept(TabModel tab) {
+    if (!tab.isSlept.value) return;
+    final snapshot = tab.sleepSnapshot;
+    final url = (snapshot?['url'] as String?) ?? tab.url.value;
+    if (url.isEmpty || url.startsWith('about:')) {
+      tab.isSlept.value = false;
+      return;
+    }
+    _pendingRestore[tab.id] = snapshot ?? {'url': url};
+    tab.isSlept.value = false;
+    tab.kernel.loadUrl(url);
+    notifyListeners();
+  }
+
+  /// 按设置启停休眠扫描（每 60 秒检查一次）
+  void _ensureSleepTimer() {
+    if (!config.tabSleepEnabled) {
+      _sleepTimer?.cancel();
+      _sleepTimer = null;
+      return;
+    }
+    _sleepTimer ??= Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _sweepSleepingTabs(),
+    );
+  }
+
+  /// 卸载超时后台标签的页面，释放渲染进程与 JS 堆
+  Future<void> _sweepSleepingTabs() async {
+    if (!config.tabSleepEnabled || _sleepSweeping) return;
+    _sleepSweeping = true;
+    try {
+      final threshold = Duration(minutes: config.tabSleepMinutes);
+      final now = DateTime.now();
+      for (final tab in _tabs.toList()) {
+        final should = TabMemoryPolicy.shouldSleep(
+          isActive: identical(tab, active),
+          pinned: tab.isPinned.value,
+          privateTab: tab.isPrivate,
+          tabCount: _tabs.length,
+          idle: now.difference(tab.lastActiveAt),
+          threshold: threshold,
+        );
+        if (should) await _sleepTab(tab);
+      }
+    } finally {
+      _sleepSweeping = false;
+      notifyListeners();
+    }
+  }
+
+  /// 采集快照后把页面卸载为空白页；URL 保留在标签上便于恢复
+  Future<void> _sleepTab(TabModel tab) async {
+    if (tab.isSlept.value) return;
+    // 扫描期间被切回 / 仍在加载的标签不处理
+    if (identical(tab, active) || tab.isLoading.value) return;
+    final url = tab.url.value;
+    if (url.isEmpty || url.startsWith('about:') || url.startsWith('data:')) {
+      return;
+    }
+    final raw =
+        await tab.kernel.evaluateJavascript(TabMemoryPolicy.snapshotScript);
+    final snapshot = TabMemoryPolicy.decodeSnapshot(raw) ?? <String, dynamic>{};
+    snapshot['url'] = (snapshot['url'] as String?) ?? url;
+    tab.sleepSnapshot = snapshot;
+    tab.isSlept.value = true;
+    await tab.kernel.loadUrl('about:blank');
+    tab.url.value = snapshot['url'] as String;
+  }
+
   /// 切换到下一个 / 上一个标签（Ctrl+Tab 用）
   void activateNext() {
     if (_tabs.length < 2) return;
     _activeIndex = (_activeIndex + 1) % _tabs.length;
+    _syncActiveState();
     notifyListeners();
   }
 
   void activatePrevious() {
     if (_tabs.length < 2) return;
     _activeIndex = (_activeIndex - 1 + _tabs.length) % _tabs.length;
+    _syncActiveState();
     notifyListeners();
   }
 
@@ -727,6 +871,7 @@ class TabManager extends ChangeNotifier {
   void activateAt(int index) {
     if (index < 0 || index >= _tabs.length) return;
     _activeIndex = index;
+    _syncActiveState();
     notifyListeners();
   }
 
@@ -880,6 +1025,7 @@ class TabManager extends ChangeNotifier {
   @override
   void dispose() {
     _sessionTimer?.cancel();
+    _sleepTimer?.cancel();
     config.removeListener(_applyConfigToKernels);
     zoomService?.removeListener(_applyZoomToAllTabs);
     _userscriptRequestCtrl.close();

@@ -13,7 +13,11 @@ enum DensityOption { comfortable, compact }
 enum RadiusLevel { none, small, medium, large }
 
 /// 莫奈取色源
-enum MonetSource { system, builtin }
+///
+/// - system：系统强调色 / 系统动态色板（Android 12+）
+/// - wallpaper：桌面壁纸主色（Windows 支持；其他平台回退系统或内置引擎）
+/// - builtin：内置莫奈引擎，用手动种子色生成全套色调
+enum MonetSource { system, wallpaper, builtin }
 
 /// 外观设置：可自定义的视觉参数
 class AppearanceSettings extends ChangeNotifier {
@@ -30,6 +34,7 @@ class AppearanceSettings extends ChangeNotifier {
   static const String _kMonetSource = 'appearance.monet_source';
   static const String _kLiquidGlass = 'appearance.liquid_glass';
   static const String _kFontFamily = 'appearance.font_family';
+  static const String _kWebFont = 'appearance.web_font';
 
   final SharedPreferences _prefs;
 
@@ -106,6 +111,14 @@ class AppearanceSettings extends ChangeNotifier {
 
   Future<void> setFontFamily(String family) async {
     await _prefs.setString(_kFontFamily, family);
+    notifyListeners();
+  }
+
+  // —— 网页字体：'' = 跟随页面自身字体；其余为注入 CSS 的字族名 ——
+  String get webFontFamily => _prefs.getString(_kWebFont) ?? '';
+
+  Future<void> setWebFontFamily(String family) async {
+    await _prefs.setString(_kWebFont, family.trim());
     notifyListeners();
   }
 
@@ -195,8 +208,8 @@ class AppearanceSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 取色源：system = 系统壁纸（Android 12+，其余平台自动回退内置引擎）；
-  /// builtin = 内置莫奈引擎（任意平台用种子色生成全套色调色板）
+  /// 取色源：system = 系统强调色 / 动态色板；wallpaper = 桌面壁纸主色；
+  /// builtin = 内置莫奈引擎（用种子色生成全套色调色板）
   MonetSource get monetSource {
     final v = _prefs.getString(_kMonetSource);
     return MonetSource.values.firstWhere(
@@ -207,6 +220,19 @@ class AppearanceSettings extends ChangeNotifier {
 
   Future<void> setMonetSource(MonetSource source) async {
     await _prefs.setString(_kMonetSource, source.name);
+    notifyListeners();
+  }
+
+  // —— 运行期系统取色结果（不持久化）——
+  // 平台取色（Windows 强调色 / 壁纸主色）在启动时异步读取，读到后写入这里
+  // 并通知重建主题；读不到保持 null，主题回退手动种子色。
+  Color? _systemSeedOverride;
+
+  Color? get systemSeedOverride => _systemSeedOverride;
+
+  void setSystemSeedOverride(Color? color) {
+    if (_systemSeedOverride == color) return;
+    _systemSeedOverride = color;
     notifyListeners();
   }
 

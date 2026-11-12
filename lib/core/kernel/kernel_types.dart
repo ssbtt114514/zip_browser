@@ -183,6 +183,9 @@ class KernelViewConfig {
   /// 允许的 bridge 通道（来自插件权限声明）
   final Set<String> allowedBridgeMethods;
 
+  /// 注入页面调试钩子（控制台 / 异常 / 网络），由设置开关控制
+  final bool debugInjection;
+
   const KernelViewConfig({
     required this.tabId,
     this.initialUrl,
@@ -191,6 +194,7 @@ class KernelViewConfig {
     this.nativeLibraryPath,
     this.kernelDataDir,
     this.allowedBridgeMethods = const {},
+    this.debugInjection = false,
   });
 }
 

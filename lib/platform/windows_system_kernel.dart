@@ -5,6 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 import '../core/bridge/find_script.dart';
+import '../core/debug/debug_injector.dart';
+import '../core/debug/debug_log.dart';
+import '../core/debug/debug_log_source.dart';
 import '../core/bridge/internal_dispatcher.dart';
 import '../core/bridge/js_bridge.dart';
 import '../core/desktop_mode_config.dart';
@@ -18,7 +21,7 @@ import '../core/sniff/sniff_model.dart';
 /// * [fixedRuntimeDir] == null：使用系统 Evergreen Runtime
 /// * 传入目录：使用插件携带的 WebView2 Fixed Version 固定版本内核
 ///   （browserExecutableFolder）
-class WindowsSystemKernel implements BrowserKernel {
+class WindowsSystemKernel implements BrowserKernel, DebugLogSource, NativeDevTools {
   /// WebView2 环境是进程级、只能初始化一次
   static bool _environmentReady = false;
   static String? _environmentBrowserExePath;
@@ -37,6 +40,7 @@ class WindowsSystemKernel implements BrowserKernel {
   bool _canGoForward = false;
   String _lastUrl = '';
   final List<StreamSubscription> _subs = [];
+  bool _debugInjection = false;
 
   final _nav = StreamController<NavigationEvent>.broadcast();
   final _progressC = StreamController<double>.broadcast();
@@ -75,6 +79,7 @@ class WindowsSystemKernel implements BrowserKernel {
   @override
   Future<void> initialize(KernelViewConfig config) async {
     _scripts = config.userScripts;
+    _debugInjection = config.debugInjection;
     _bridgeGlobalName = config.bridgeGlobalName;
     _bridge = JsBridgeHub(
       globalName: config.bridgeGlobalName,
@@ -109,6 +114,13 @@ class WindowsSystemKernel implements BrowserKernel {
     await controller.addScriptToExecuteOnDocumentCreated(
       ResourceSniffer.buildScript(config.bridgeGlobalName),
     );
+
+    // 3d. 调试钩子（设置开启时；控制台 / 异常 / 网络）
+    if (_debugInjection) {
+      await controller.addScriptToExecuteOnDocumentCreated(
+        DebugInjector.buildScript(bridgeGlobalName: config.bridgeGlobalName),
+      );
+    }
 
     // 4. content scripts（自带 matches / timing 包装）
     for (final script in _scripts) {
@@ -230,6 +242,23 @@ else __run();
   Future<bool> canGoBack() async => _canGoBack;
   @override
   Future<bool> canGoForward() async => _canGoForward;
+
+  @override
+  Stream<DebugLogEntry> get debugLogs => _internal.debugLogs;
+
+  /// 打开 WebView2 自带 DevTools 窗口（独立窗口，非嵌入）
+  @override
+  Future<bool> openNativeDevTools() async {
+    final controller = _controller;
+    if (controller == null) return false;
+    try {
+      await controller.openDevTools();
+      return true;
+    } catch (e) {
+      debugPrint('打开原生 DevTools 失败：$e');
+      return false;
+    }
+  }
 
   @override
   Future<String?> evaluateJavascript(String script) async {

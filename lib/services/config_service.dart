@@ -26,6 +26,10 @@ class ConfigService extends ChangeNotifier {
   static const _kBookmarksBar = 'ui.bookmarks_bar';
   static const _kBottomNav = 'ui.bottom_nav';
   static const _kClipboardDetect = 'ui.clipboard_detect';
+  static const _kDevTools = 'dev.devtools_enabled';
+  static const _kTuning = 'perf.web_tuning';
+  static const _kTabSleep = 'perf.tab_sleep';
+  static const _kTabSleepMinutes = 'perf.tab_sleep_minutes';
   static const _kAdBlock = 'content.ad_block';
   static const _kAdBlockCustom = 'content.ad_block_custom';
   static const _kAdBlockAllow = 'content.ad_block_allow';
@@ -136,6 +140,26 @@ class ConfigService extends ChangeNotifier {
       _prefs.getBool(_kClipboardDetect) ?? true;
   Future<void> setClipboardDetectEnabled(bool value) =>
       _apply(() => _prefs.setBool(_kClipboardDetect, value));
+
+  /// 开发者工具（默认关闭）：开启后注入页面调试钩子并允许打开调试页
+  bool get devToolsEnabled => _prefs.getBool(_kDevTools) ?? false;
+  Future<void> setDevToolsEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kDevTools, value));
+
+  /// 网页访问优化（预连接 / 优先级提示，默认开启）
+  bool get webTuningEnabled => _prefs.getBool(_kTuning) ?? true;
+  Future<void> setWebTuningEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kTuning, value));
+
+  /// 后台标签休眠（默认关闭）：超时后台标签卸载页面，切回时恢复
+  bool get tabSleepEnabled => _prefs.getBool(_kTabSleep) ?? false;
+  Future<void> setTabSleepEnabled(bool value) =>
+      _apply(() => _prefs.setBool(_kTabSleep, value));
+
+  /// 休眠空闲阈值（分钟，1~120）
+  int get tabSleepMinutes => _prefs.getInt(_kTabSleepMinutes) ?? 10;
+  Future<void> setTabSleepMinutes(int value) =>
+      _apply(() => _prefs.setInt(_kTabSleepMinutes, value.clamp(1, 120)));
 
   // —— 内容过滤：广告拦截 ——
   /// 广告拦截（默认开启）：注入拦截脚本，屏蔽常见广告/跟踪请求与元素

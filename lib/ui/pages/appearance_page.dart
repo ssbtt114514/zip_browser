@@ -6,6 +6,7 @@ import '../../core/theme/appearance_settings.dart';
 import '../../core/theme/style_mode.dart';
 import '../../services/config_service.dart';
 import '../../services/font_service.dart';
+import '../../platform/windows_theme_bootstrap.dart';
 
 /// 外观自定义页：主题模式、主色、强调色、字体、密度、圆角、起始页背景、纯黑模式
 class AppearancePage extends StatelessWidget {
@@ -42,6 +43,36 @@ class AppearancePage extends StatelessWidget {
             .showSnackBar(SnackBar(content: Text('导入失败：${e.toString()}')));
       }
     }
+  }
+
+  Future<void> _editWebFont(
+      BuildContext context, AppearanceSettings s) async {
+    final controller = TextEditingController(text: s.webFontFamily);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('网页字体'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '例如：Noto Serif SC',
+            helperText: '留空表示跟随页面；字体需系统或网页已加载',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) await s.setWebFontFamily(result);
   }
 
   @override
@@ -137,22 +168,39 @@ class AppearancePage extends StatelessWidget {
                   title: const Text('莫奈取色'),
                   subtitle: const Text('基于 HCT 色彩空间生成 Android 12 同款配色'),
                   value: s.monetEnabled,
-                  onChanged: s.setMonetEnabled,
+                  onChanged: (v) {
+                    s.setMonetEnabled(v);
+                    if (v) WindowsThemeBootstrap.apply(s);
+                  },
                 ),
                 if (s.monetEnabled)
                   RadioGroup<MonetSource>(
                     groupValue: s.monetSource,
                     onChanged: (v) {
-                      if (v != null) s.setMonetSource(v);
+                      if (v == null) return;
+                      s.setMonetSource(v);
+                      if (v == MonetSource.builtin) {
+                        s.setSystemSeedOverride(null);
+                      } else {
+                        WindowsThemeBootstrap.apply(s);
+                      }
                     },
                     child: const Column(
                       children: [
                         RadioListTile<MonetSource>(
                           value: MonetSource.system,
                           dense: true,
-                          title: Text('系统壁纸取色'),
+                          title: Text('系统取色'),
                           subtitle: Text(
-                              'Android 12+ 跟随壁纸；其他平台自动回退到内置引擎',
+                              'Android 12+ 跟随系统动态色板；Windows 取系统强调色',
+                              style: TextStyle(fontSize: 11.5)),
+                        ),
+                        RadioListTile<MonetSource>(
+                          value: MonetSource.wallpaper,
+                          dense: true,
+                          title: Text('壁纸取色'),
+                          subtitle: Text(
+                              '从当前桌面壁纸提取主色（Windows；失败时回退强调色）',
                               style: TextStyle(fontSize: 11.5)),
                         ),
                         RadioListTile<MonetSource>(
@@ -264,6 +312,50 @@ class AppearancePage extends StatelessWidget {
                       ? const Icon(Icons.check, size: 20)
                       : null,
                   onTap: () => _importCustomFont(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // —— 网页字体（与界面字体分离）——
+          const _SectionTitle('网页字体'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.language),
+                  title: const Text('跟随页面'),
+                  subtitle: const Text('使用网页自身的字体设置'),
+                  trailing: s.webFontFamily.isEmpty
+                      ? const Icon(Icons.check, size: 20)
+                      : null,
+                  onTap: () => s.setWebFontFamily(''),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.sync_alt),
+                  title: const Text('与界面字体一致'),
+                  subtitle: Text(
+                    s.fontFamily.isEmpty ? '系统默认字体' : s.fontFamily,
+                  ),
+                  trailing: s.webFontFamily.isNotEmpty &&
+                          s.webFontFamily ==
+                              (s.fontFamily.isEmpty ? 'sans-serif' : s.fontFamily)
+                      ? const Icon(Icons.check, size: 20)
+                      : null,
+                  onTap: () => s.setWebFontFamily(
+                    s.fontFamily.isEmpty ? 'sans-serif' : s.fontFamily,
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.text_fields),
+                  title: const Text('自定义字族'),
+                  subtitle: Text(
+                    s.webFontFamily.isEmpty
+                        ? '输入网页 CSS 字族名，例如：Noto Serif SC'
+                        : '当前：${s.webFontFamily}',
+                  ),
+                  onTap: () => _editWebFont(context, s),
                 ),
               ],
             ),

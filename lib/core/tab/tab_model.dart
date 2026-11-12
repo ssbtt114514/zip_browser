@@ -24,6 +24,15 @@ class TabModel {
   /// 固定标签：始终排在最前，且不显示关闭按钮
   final ValueNotifier<bool> isPinned = ValueNotifier(false);
 
+  /// 后台休眠状态：页面已卸载为 about:blank，切回时重新加载
+  final ValueNotifier<bool> isSlept = ValueNotifier(false);
+
+  /// 休眠前的页面快照（URL / 滚动位置 / 表单值）
+  Map<String, dynamic>? sleepSnapshot;
+
+  /// 最近一次处于前台的时间（用于休眠判定）
+  DateTime lastActiveAt = DateTime.now();
+
   /// 当前页缩放倍率（1.0 = 100%）
   final ValueNotifier<double> zoom = ValueNotifier(1.0);
 
