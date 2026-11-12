@@ -10,24 +10,24 @@ class DebugInjector {
 
   static const int maxEntries = 300;
 
-  /// [network] 为 false 时只 hook 控制台与异常
+  /// [network] 为 false 时只 hook 控制台与异常（不生成网络钩子代码）
   static String buildScript({
     required String bridgeGlobalName,
     bool network = true,
   }) {
-    return _template
+    final script = _base
         .replaceFirst('__GLOBAL__', jsonEncode(bridgeGlobalName))
-        .replaceFirst('__LIMIT__', '$maxEntries')
-        .replaceFirst('__NETWORK__', network ? 'true' : 'false');
+        .replaceFirst('__LIMIT__', '$maxEntries');
+    if (!network) return script;
+    return script.replaceFirst('__NETWORK_BLOCK__', _networkBlock);
   }
 
-  static const String _template = r'''
+  static const String _base = r'''
 (function(){
   if (window.__zbDebugInstalled) return;
   window.__zbDebugInstalled = true;
   var G = __GLOBAL__;
   var limit = __LIMIT__;
-  var withNetwork = __NETWORK__;
   var sent = 0;
 
   function send(kind, message, extra){
@@ -84,8 +84,11 @@ class DebugInjector {
     send('exception', '未处理的 Promise 拒绝：' + fmt(e && e.reason));
   });
 
-  if (!withNetwork) return;
+__NETWORK_BLOCK__
+})();
+''';
 
+  static const String _networkBlock = r'''
   var origFetch = window.fetch;
   if (origFetch){
     window.fetch = function(){
@@ -135,6 +138,5 @@ class DebugInjector {
       return origSend.apply(this, arguments);
     };
   }
-})();
 ''';
 }
