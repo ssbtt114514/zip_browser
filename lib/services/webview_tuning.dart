@@ -8,16 +8,14 @@ class WebViewTuning {
   WebViewTuning._();
 
   /// 预取并预连接页面自身与主要第三方资源域名
-  static UserScript preconnectScript() => UserScript(
+  static UserScript preconnectScript() => const UserScript(
         timing: UserScriptInjectionTiming.documentStart,
-        matches: const ['*'],
         source: _preconnect,
       );
 
   /// 首屏图片 `fetchpriority=high`，首屏外图片延迟加载
-  static UserScript priorityHintScript() => UserScript(
+  static UserScript priorityHintScript() => const UserScript(
         timing: UserScriptInjectionTiming.documentStart,
-        matches: const ['*'],
         source: _priorityHints,
       );
 

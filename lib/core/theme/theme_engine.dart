@@ -156,14 +156,14 @@ class ThemeEngine {
           borderRadius: BorderRadius.circular(cupertino ? 4 : 2),
         ),
       ),
-      radioTheme: RadioThemeData(
+      radioTheme: const RadioThemeData(
         visualDensity: VisualDensity.compact,
       ),
-      sliderTheme: SliderThemeData(
+      sliderTheme: const SliderThemeData(
         trackHeight: 3,
-        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+        overlayShape: RoundSliderOverlayShape(overlayRadius: 14),
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
         linearMinHeight: 3,
       ),
       navigationBarTheme: NavigationBarThemeData(
