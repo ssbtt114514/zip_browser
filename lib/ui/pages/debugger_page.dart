@@ -68,7 +68,8 @@ class _DebuggerPageState extends State<DebuggerPage>
 
     final kernel = tab.kernel;
     if (kernel is DebugLogSource) {
-      _sub = kernel.debugLogs.listen((entry) {
+      // DebugLogSource 与 BrowserKernel 无继承关系，需显式转换
+      _sub = (kernel as DebugLogSource).debugLogs.listen((entry) {
         if (!mounted) return;
         setState(() {
           _entries.add(entry);
@@ -197,7 +198,7 @@ class _DebuggerPageState extends State<DebuggerPage>
     final tab = _tab;
     final kernel = tab?.kernel;
     if (kernel is! NativeDevTools) return;
-    final ok = await kernel.openNativeDevTools();
+    final ok = await (kernel as NativeDevTools).openNativeDevTools();
     if (!ok && mounted) {
       messengerKey.currentState?.showSnackBar(
         const SnackBar(content: Text('打开原生 DevTools 失败')),
