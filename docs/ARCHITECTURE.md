@@ -302,7 +302,7 @@ window.zipBrowser.on('event', data => ...)
 > gecko 风味随包内置 `.zbk` 内核，安装后固定版本、不再依赖系统组件。
 >
 > 应用包只产 Flutter 官方支持的架构：Android 三 ABI（arm64-v8a / armeabi-v7a / x86_64，
-> Flutter 3.47 已不再构建 32 位 x86），
+> Flutter 3.32 / 3.47 均不构建 32 位 x86），
 > Linux 为 x64 / arm64，Windows 仅 x64（Flutter 的 windows 构建不支持
 > `--target-platform`）；内核原生库仍按四 Android ABI 与 Windows arm64 编译。
 

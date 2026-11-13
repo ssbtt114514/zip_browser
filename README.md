@@ -3,8 +3,9 @@
 一个使用 **Flutter** 开发、可通过**独立内核包（.zbk）**扩展浏览器内核的多平台浏览器框架。
 
 - ✅ **Android**：调用系统 **Android System WebView**（不打包内核，随系统更新）；
-  minSdk 21（Android 5.0，边界说明见
-  [docs/ANDROID_COMPAT.md](docs/ANDROID_COMPAT.md)）
+  minSdk 21（Android 5.0）。Android 安装包固定用 Flutter 3.32.8 构建
+  （最后一个官方支持 API 21 的稳定版），三 ABI 均可安装，细节见
+  [docs/ANDROID_COMPAT.md](docs/ANDROID_COMPAT.md)
 - ✅ **Windows**：使用 **WebView2**（Edge Chromium）
 - ✅ **Linux**：使用 **WebKitGTK**
 - 🚧 **macOS**：架构已预留，后续适配
@@ -223,7 +224,7 @@ flutter build apk --release   # 产物：build/app/outputs/flutter-apk/app-relea
 
 | 工作流 | 产物 |
 |--------|------|
-| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android 三风味 release APK（none / chromium / gecko），含 arm64-v8a / armeabi-v7a / x86_64（Flutter 3.47 已不再产出 32 位 x86）；gecko 风味用 NDK 编译四 ABI 内核库 并内置 `.zbk`；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
+| [build-android-apk.yml](.github/workflows/build-android-apk.yml) | Android 三风味 release APK（none / chromium / gecko），含 arm64-v8a / armeabi-v7a / x86_64（Flutter 3.32 / 3.47 均不产出 32 位 x86）；gecko 风味用 NDK 编译四 ABI 内核库 并内置 `.zbk`；main 推送即构建并校验 APK 内容，推 `v*` tag 时挂到 Release |
 | [build-linux.yml](.github/workflows/build-linux.yml) | Linux 三风味桌面版，x64 / arm64 两架构（`zip-browser-linux-<arch>-<flavor>.tar.gz`）；gecko 风味本机编译内核并内置；先跑单元测试 |
 | [build-kernel.yml](.github/workflows/build-kernel.yml) | **先跑 gcc 端到端自检**（106 项断言），再构建 `zb_lite_kernel` / `zb_example_kernel` 的 Windows `.dll` + Linux `.so` + Android 三 ABI `.so`，校验 16 个导出符号；产出 `lite_kernel.zip` / `hello_ffi_kernel.zip` / `zb_lite_kernel.zbk`，另加 `zb_chromium_kernel.zbk`（自带固定版本 Chromium 运行时）与 `zb_gecko_kernel.zbk`（Gecko 引擎适配包）；推 `v*` tag 时把这 5 个包挂到 Release |
 | [build-windows.yml](.github/workflows/build-windows.yml) | 静态检查 + 单元测试 → 构建三风味（none / chromium / gecko）的 Windows x64 release；gecko 用 MSVC 编译内核 DLL 并内置 → 各自打包 zip 与 **Inno Setup 安装器**（独立 AppId，安装时静默装 VC++ 运行库与 WebView2 常青版）；推 `v*` tag 时挂到 Release |

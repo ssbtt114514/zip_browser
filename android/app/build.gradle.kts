@@ -1,5 +1,8 @@
 plugins {
     id("com.android.application")
+    // Flutter 3.32 的 Gradle 插件不会自动应用 Kotlin 插件，
+    // 必须显式声明；版本由 android/settings.gradle.kts 统一管理。
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -20,10 +23,13 @@ android {
         applicationId = "com.zipbrowser.zip_browser"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Zip Browser：固定 21（Android 5.0，Flutter 引擎下限；
-        // Android 4.x 的支持结论见 docs/ANDROID_COMPAT.md）
+        // Zip Browser：固定 21（Android 5.0）。配套构建链固定 Flutter 3.32.8
+        // ——最后一个官方支持 API 21 的稳定版；Android 4.x 的结论见
+        // docs/ANDROID_COMPAT.md。
         minSdk = 21
-        targetSdk = flutter.targetSdkVersion
+        // Flutter 3.32 的 flutter.targetSdkVersion 是 35，这里显式抬到 36，
+        // 保持新设备上的行为与上架要求一致（Android 5 上该值不生效）。
+        targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
