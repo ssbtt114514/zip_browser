@@ -23,7 +23,9 @@ dependencies:
   provider: ^6.1.2
 
   # —— Material You / 莫奈动态取色（Android 12+）——
-  dynamic_color: ^1.7.0
+  # 上限 <1.9.0：1.9.0 起 Android 端改用了 AGP 9 内建 Kotlin 的构建脚本，
+  # 在 Android 5 适配链（AGP 8.9.2 + Gradle 8.12.1）下 `kotlin {}` 扩展无法解析。
+  dynamic_color: ">=1.7.0 <1.9.0"
   # CorePalette 类型来源（dynamic_color 1.9 不再直接导出）。
   # 下限 0.11.1 与 Flutter 3.32.8（Android 构建链）中 flutter_test 的
   # SDK pin 一致；Windows/Linux 的 3.47.6 会解析到更高版本。
