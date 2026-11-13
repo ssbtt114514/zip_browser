@@ -251,11 +251,9 @@ class ThemeEngine {
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           for (final p in TargetPlatform.values)
-            p: cupertino
-                ? const CupertinoPageTransitionsBuilder()
-                : (p == TargetPlatform.iOS || p == TargetPlatform.macOS
-                    ? const CupertinoPageTransitionsBuilder()
-                    : const ZoomPageTransitionsBuilder()),
+            p: cupertino || p == TargetPlatform.iOS || p == TargetPlatform.macOS
+                ? const _IosSlideTransitionsBuilder()
+                : const ZoomPageTransitionsBuilder(),
         },
       ),
     );
@@ -285,6 +283,35 @@ class ThemeEngine {
       labelLarge: TextStyle(fontSize: 14 * scale, color: color, fontFamily: family),
       labelMedium: TextStyle(fontSize: 12 * scale, color: subColor, fontFamily: family),
       labelSmall: TextStyle(fontSize: 11 * scale, color: subColor, fontFamily: family),
+    );
+  }
+}
+
+/// iOS 风格横向滑入转场（含上一页视差退让）。自研实现用于规避
+/// `CupertinoPageTransitionsBuilder` 在 Flutter 3.32（material 导出）
+/// 与 3.47+（仅 cupertino 导出）之间的导出位置漂移。
+class _IosSlideTransitionsBuilder extends PageTransitionsBuilder {
+  const _IosSlideTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final enter = animation.drive(
+      Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+          .chain(CurveTween(curve: Curves.easeOutCubic)),
+    );
+    final exit = secondaryAnimation.drive(
+      Tween<Offset>(begin: Offset.zero, end: const Offset(-0.3, 0))
+          .chain(CurveTween(curve: Curves.easeOutCubic)),
+    );
+    return SlideTransition(
+      position: exit,
+      child: SlideTransition(position: enter, child: child),
     );
   }
 }
