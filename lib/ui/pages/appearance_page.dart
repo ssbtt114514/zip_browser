@@ -45,6 +45,15 @@ class AppearancePage extends StatelessWidget {
     }
   }
 
+  void _selectMonetSource(AppearanceSettings s, MonetSource v) {
+    s.setMonetSource(v);
+    if (v == MonetSource.builtin) {
+      s.setSystemSeedOverride(null);
+    } else {
+      WindowsThemeBootstrap.apply(s);
+    }
+  }
+
   Future<void> _editWebFont(
       BuildContext context, AppearanceSettings s) async {
     final controller = TextEditingController(text: s.webFontFamily);
@@ -140,21 +149,17 @@ class AppearancePage extends StatelessWidget {
           // —— 主题模式 ——
           const _SectionTitle('主题模式'),
           Card(
-            child: RadioGroup<ThemeModeOption>(
-              groupValue: s.themeMode,
-              onChanged: (v) {
-                if (v != null) s.setThemeMode(v);
-              },
-              child: Column(
-                children: [
-                  for (final mode in ThemeModeOption.values)
-                    RadioListTile<ThemeModeOption>(
-                      value: mode,
-                      title: Text(_modeLabel(mode)),
-                      secondary: Icon(_modeIcon(mode)),
-                    ),
-                ],
-              ),
+            child: Column(
+              children: [
+                for (final mode in ThemeModeOption.values)
+                  _ChoiceTile<ThemeModeOption>(
+                    value: mode,
+                    selectedValue: s.themeMode,
+                    onSelected: s.setThemeMode,
+                    title: _modeLabel(mode),
+                    icon: _modeIcon(mode),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -174,45 +179,33 @@ class AppearancePage extends StatelessWidget {
                   },
                 ),
                 if (s.monetEnabled)
-                  RadioGroup<MonetSource>(
-                    groupValue: s.monetSource,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      s.setMonetSource(v);
-                      if (v == MonetSource.builtin) {
-                        s.setSystemSeedOverride(null);
-                      } else {
-                        WindowsThemeBootstrap.apply(s);
-                      }
-                    },
-                    child: const Column(
-                      children: [
-                        RadioListTile<MonetSource>(
-                          value: MonetSource.system,
-                          dense: true,
-                          title: Text('系统取色'),
-                          subtitle: Text(
-                              'Android 12+ 跟随系统动态色板；Windows 取系统强调色',
-                              style: TextStyle(fontSize: 11.5)),
-                        ),
-                        RadioListTile<MonetSource>(
-                          value: MonetSource.wallpaper,
-                          dense: true,
-                          title: Text('壁纸取色'),
-                          subtitle: Text(
-                              '从当前桌面壁纸提取主色（Windows；失败时回退强调色）',
-                              style: TextStyle(fontSize: 11.5)),
-                        ),
-                        RadioListTile<MonetSource>(
-                          value: MonetSource.builtin,
-                          dense: true,
-                          title: Text('内置莫奈引擎'),
-                          subtitle: Text(
-                              '任意平台用下方主色调作为种子生成全套莫奈色板',
-                              style: TextStyle(fontSize: 11.5)),
-                        ),
-                      ],
-                    ),
+                  Column(
+                    children: [
+                      _ChoiceTile<MonetSource>(
+                        value: MonetSource.system,
+                        selectedValue: s.monetSource,
+                        dense: true,
+                        title: '系统取色',
+                        subtitle: 'Android 12+ 跟随系统动态色板；Windows 取系统强调色',
+                        onSelected: (v) => _selectMonetSource(s, v),
+                      ),
+                      _ChoiceTile<MonetSource>(
+                        value: MonetSource.wallpaper,
+                        selectedValue: s.monetSource,
+                        dense: true,
+                        title: '壁纸取色',
+                        subtitle: '从当前桌面壁纸提取主色（Windows；失败时回退强调色）',
+                        onSelected: (v) => _selectMonetSource(s, v),
+                      ),
+                      _ChoiceTile<MonetSource>(
+                        value: MonetSource.builtin,
+                        selectedValue: s.monetSource,
+                        dense: true,
+                        title: '内置莫奈引擎',
+                        subtitle: '任意平台用下方主色调作为种子生成全套莫奈色板',
+                        onSelected: (v) => _selectMonetSource(s, v),
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -400,20 +393,16 @@ class AppearancePage extends StatelessWidget {
           // —— 控件密度 ——
           const _SectionTitle('控件密度'),
           Card(
-            child: RadioGroup<DensityOption>(
-              groupValue: s.density,
-              onChanged: (v) {
-                if (v != null) s.setDensity(v);
-              },
-              child: Column(
-                children: [
-                  for (final d in DensityOption.values)
-                    RadioListTile<DensityOption>(
-                      value: d,
-                      title: Text(_densityLabel(d)),
-                    ),
-                ],
-              ),
+            child: Column(
+              children: [
+                for (final d in DensityOption.values)
+                  _ChoiceTile<DensityOption>(
+                    value: d,
+                    selectedValue: s.density,
+                    onSelected: s.setDensity,
+                    title: _densityLabel(d),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -824,6 +813,76 @@ class _StylePreviewCard extends StatelessWidget {
       ),
       child: Text('按钮',
           style: TextStyle(fontSize: 10, color: accent)),
+    );
+  }
+}
+
+/// 通用单选行：不依赖 Flutter 的 Radio 组件族，避免 Material 3 版本间
+/// `RadioGroup` / `groupValue` 的 API 漂移（Flutter 3.32 无 RadioGroup，
+/// 3.47 的 Radio.groupValue 已弃用）。
+class _ChoiceTile<T> extends StatelessWidget {
+  const _ChoiceTile({
+    required this.value,
+    required this.selectedValue,
+    required this.onSelected,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.dense = false,
+  });
+
+  final T value;
+  final T selectedValue;
+  final ValueChanged<T> onSelected;
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == selectedValue;
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => onSelected(value),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: dense ? 10 : 14,
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 16),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 14.5)),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 20,
+              color: selected ? scheme.primary : scheme.outline,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

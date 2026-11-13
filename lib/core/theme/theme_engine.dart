@@ -1,5 +1,4 @@
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_color_utilities/palettes/core_palette.dart';
@@ -100,11 +99,6 @@ class ThemeEngine {
         iconTheme: IconThemeData(
           color: isDark ? Colors.white : Colors.black87,
         ),
-      ),
-      // Cupertino 导航栏底部细分割线
-      bottomAppBarTheme: BottomAppBarThemeData(
-        color: isDark ? const Color(0xFF1A1D22) : Colors.white,
-        elevation: 0,
       ),
       dividerTheme: DividerThemeData(
         color: isDark ? Colors.white12 : Colors.black12,
