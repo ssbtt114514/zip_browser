@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -369,7 +370,12 @@ class _TabChipState extends State<_TabChip> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
+        child: Listener(
+          // 桌面习惯：鼠标中键关闭标签页
+          onPointerDown: (event) {
+            if (event.buttons == kMiddleMouseButton) widget.onClose();
+          },
+          child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
           onLongPress: () => widget.onMenu(null),
@@ -416,6 +422,7 @@ class _TabChipState extends State<_TabChip> {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

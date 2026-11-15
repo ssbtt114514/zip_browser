@@ -92,6 +92,19 @@ CallbackShortcuts(browserShortcutBindings)
                └─ [可选] SniffPanel
 ```
 
+**布局自适应与方向锁定**：`browser_shell.dart` 以屏幕宽高判定紧凑布局
+（宽 < 720，或横屏且高 < 560），横屏且启用底部导航时改为左侧 52dp
+竖排导航（`_SideNavBar`），与底部导航复用同一主菜单弹层。方向模式由
+`ConfigService.orientation` 持久化，`_OrientationBinder` 在启动与切换时
+调用 `SystemChrome.setPreferredOrientations`。设置页与内核管理页在
+宽度 ≥ 780 时以最大 780dp 居中，避免超宽屏拉散表单。
+
+**内核选择界面**（`lib/ui/pages/kernels_page.dart`）：读取
+`KernelRegistry.describe()` 渲染平台默认、系统/内置、独立内核包、插件
+携带四类来源；选中即写入 `kernel.selected_id`，仅对新建标签页生效。
+`.zbk` 安装走 `FilePicker` + `KernelManager.installFromFile`，卸载会删除
+安装目录并在必要时回退平台默认。
+
 两个关键约束：
 
 1. **联想下拉为什么放在内容区**：它必须覆盖网页内容而不被工具栏高度裁切。

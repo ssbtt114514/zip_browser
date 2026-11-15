@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/desktop_mode_config.dart';
+import '../core/orientation_mode.dart';
 import '../core/theme/style_mode.dart';
 import '../core/web/web_enhance_settings.dart';
 
@@ -26,6 +27,8 @@ class ConfigService extends ChangeNotifier {
   static const _kBookmarksBar = 'ui.bookmarks_bar';
   static const _kBottomNav = 'ui.bottom_nav';
   static const _kClipboardDetect = 'ui.clipboard_detect';
+  static const _kOrientation = 'ui.orientation';
+  static const _kDimmer = 'ui.dimmer';
   static const _kDevTools = 'dev.devtools_enabled';
   static const _kTuning = 'perf.web_tuning';
   static const _kTabSleep = 'perf.tab_sleep';
@@ -140,6 +143,17 @@ class ConfigService extends ChangeNotifier {
       _prefs.getBool(_kClipboardDetect) ?? true;
   Future<void> setClipboardDetectEnabled(bool value) =>
       _apply(() => _prefs.setBool(_kClipboardDetect, value));
+
+  /// 屏幕方向模式（默认跟随系统）
+  AppOrientationMode get orientation =>
+      parseAppOrientationMode(_prefs.getString(_kOrientation));
+  Future<void> setOrientation(AppOrientationMode mode) =>
+      _apply(() => _prefs.setString(_kOrientation, mode.name));
+
+  /// 护眼调光强度（0.0–0.6，默认关闭）
+  double get dimmer => (_prefs.getDouble(_kDimmer) ?? 0).clamp(0.0, 0.6);
+  Future<void> setDimmer(double value) =>
+      _apply(() => _prefs.setDouble(_kDimmer, value.clamp(0.0, 0.6)));
 
   /// 开发者工具（默认关闭）：开启后注入页面调试钩子并允许打开调试页
   bool get devToolsEnabled => _prefs.getBool(_kDevTools) ?? false;

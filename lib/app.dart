@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/kernel/kernel_manager.dart';
+import 'core/orientation_mode.dart';
 import 'core/kernel/kernel_registry.dart';
 import 'core/plugin/plugin_manager.dart';
 import 'core/script/userscript_manager.dart';
@@ -21,6 +22,7 @@ import 'services/web_enhance_service.dart';
 import 'services/zoom_service.dart';
 import 'ui/browser_shell.dart';
 import 'ui/omnibox_controller.dart';
+import 'ui/widgets/dimmer_overlay.dart';
 import 'ui/widgets/theme_builder.dart';
 
 class ZipBrowserApp extends StatelessWidget {
@@ -94,9 +96,40 @@ class ZipBrowserApp extends StatelessWidget {
               OmniboxController()..attach(ctx.read<UrlSuggestService>()),
         ),
       ],
-      child: const ThemeBuilder(
-        child: BrowserShell(),
+      child: const _OrientationBinder(
+        child: DimmerOverlay(
+          child: ThemeBuilder(
+            child: BrowserShell(),
+          ),
+        ),
       ),
     );
   }
+}
+
+/// 监听配置中的方向模式并应用到宿主（启动时与切换后立即生效）。
+class _OrientationBinder extends StatefulWidget {
+  const _OrientationBinder({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_OrientationBinder> createState() => _OrientationBinderState();
+}
+
+class _OrientationBinderState extends State<_OrientationBinder> {
+  AppOrientationMode? _applied;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mode = context.watch<ConfigService>().orientation;
+    if (mode != _applied) {
+      _applied = mode;
+      applyAppOrientation(mode);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

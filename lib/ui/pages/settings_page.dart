@@ -17,6 +17,7 @@ import 'desktop_mode_page.dart';
 import 'debugger_page.dart';
 import 'devtools_page.dart';
 import 'home_settings_page.dart';
+import 'kernels_page.dart';
 import 'reading_page.dart';
 import 'search_engines_page.dart';
 import 'update_dialog.dart';
@@ -34,9 +35,12 @@ class SettingsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: ListView(
+            padding: const EdgeInsets.all(14),
+            children: [
           // —— 通用分类入口 ——
           const _SectionTitle('通用'),
           Card(
@@ -127,6 +131,9 @@ class SettingsPage extends StatelessWidget {
                   leading: Icon(_kernelIcon(current), size: 20),
                   title: Text(current.displayName,
                       style: const TextStyle(fontSize: 14)),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const KernelsPage()),
+                  ),
                   subtitle: Text(
                     '${current.engine.label}'
                     '${current.version == null ? '' : ' · v${current.version}'}'
@@ -135,7 +142,7 @@ class SettingsPage extends StatelessWidget {
                     style: const TextStyle(fontSize: 11.5),
                   ),
                   trailing: current.available
-                      ? null
+                      ? const Icon(Icons.chevron_right, size: 20)
                       : const Icon(Icons.error_outline,
                           size: 18, color: Colors.orange),
                   isThreeLine: false,
@@ -472,7 +479,9 @@ class SettingsPage extends StatelessWidget {
               style: TextStyle(fontSize: 11.5, color: Colors.black38),
             ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -93,15 +93,20 @@ class _BrowserShellState extends State<BrowserShell> {
   }
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    // 窄屏（手机竖屏）：工具栏在上，标签栏在下
-    final compact = width < 720;
+    final size = MediaQuery.of(context).size;
+    final width = size.width;
+    final height = size.height;
+    final landscape = width > height;
+    // 窄屏（手机竖屏）或横屏且高度受限：工具栏在上，标签栏在下
+    final compact = width < 720 || (landscape && height < 560);
 
     final tm = context.watch<TabManager>();
     final tab = tm.active;
     final uiState = context.watch<BrowserUiState>();
     final config = context.watch<ConfigService>();
     final findOpen = uiState.findOpen;
+    // 横屏 + 底部导航：改用左侧竖排导航，把垂直空间留给内容
+    final sideNav = landscape && config.bottomNavEnabled;
 
     // 剪贴板检测按设置实时启停
     _syncClipboard(config.clipboardDetectEnabled);
@@ -120,8 +125,13 @@ class _BrowserShellState extends State<BrowserShell> {
           rootFocus: _rootFocus,
           child: Scaffold(
             body: SafeArea(
-              child: Column(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (sideNav) const _SideNavBar(),
+                  Expanded(
+                    child: Column(
+                      children: [
                   if (!compact) const BrowserTabBar(),
                   const MainToolbar(),
                   if (!minimal && config.showBookmarksBar)
@@ -174,7 +184,11 @@ class _BrowserShellState extends State<BrowserShell> {
                   // 扩展通知绑定
                   const _ExtensionNotificationBinder(child: SizedBox.shrink()),
                   // Firefox 风格底部导航栏（窄屏 + 设置开启时显示）
-                  if (compact && config.bottomNavEnabled) const BottomNavBar(),
+                  if (compact && config.bottomNavEnabled && !sideNav)
+                    const BottomNavBar(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -471,6 +485,80 @@ class _SniffHintBarState extends State<_SniffHintBar> {
                     ),
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 横屏专用的左侧竖排导航：与底部导航栏功能等价，节省垂直空间。
+class _SideNavBar extends StatelessWidget {
+  const _SideNavBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final tm = context.watch<TabManager>();
+    final ui = context.watch<BrowserUiState>();
+    final tab = tm.active;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 52,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          right: BorderSide(color: scheme.outlineVariant, width: 0.6),
+        ),
+      ),
+      child: SafeArea(
+        right: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            ZbIconAction(
+              icon: Icons.arrow_back,
+              tooltip: '后退',
+              size: 20,
+              extent: 44,
+              onTap: (tab?.canGoBack.value ?? false)
+                  ? () => tab?.kernel.goBack()
+                  : null,
+            ),
+            ZbIconAction(
+              icon: Icons.arrow_forward,
+              tooltip: '前进',
+              size: 20,
+              extent: 44,
+              onTap: (tab?.canGoForward.value ?? false)
+                  ? () => tab?.kernel.goForward()
+                  : null,
+            ),
+            ZbIconAction(
+              icon: Icons.home_outlined,
+              tooltip: '主页',
+              size: 20,
+              extent: 44,
+              onTap: () => tm.navigateActive(
+                  context.read<ConfigService>().homePage),
+            ),
+            ZbIconAction(
+              icon: ui.secondaryOpen ? Icons.tune : Icons.tune_outlined,
+              tooltip: '工具箱',
+              size: 20,
+              extent: 44,
+              selected: ui.secondaryOpen,
+              onTap: ui.toggleSecondary,
+            ),
+            const Spacer(),
+            ZbIconAction(
+              icon: Icons.more_horiz,
+              tooltip: '菜单',
+              size: 20,
+              extent: 44,
+              onTap: () => showBottomNavMenu(context),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );

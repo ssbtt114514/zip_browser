@@ -335,6 +335,7 @@ List<MainMenuEntry> mainMenuEntries(
     const MainMenuEntry('sniff_auto', Icons.satellite_alt_outlined, '自动嗅探媒体资源'),
     const MainMenuEntry('js', Icons.javascript_outlined, '启用 JavaScript'),
     const MainMenuEntry('adblock', Icons.block_outlined, '广告拦截'),
+    const MainMenuEntry('dimmer', Icons.nightlight_outlined, '护眼调光'),
     const MainMenuEntry('fullscreen', Icons.fullscreen, '全屏', hint: 'F11'),
     // —— 工具 ——
     const MainMenuEntry('scan', Icons.qr_code_scanner, '扫一扫', dividerBefore: true),
@@ -460,6 +461,8 @@ Future<void> handleMainMenuAction(BuildContext context, String value) async {
         final u = tab.url.value;
         await ShareHelper.share(u.startsWith('data:') ? tab.title.value : u);
       }
+    case 'dimmer':
+      await config.setDimmer(config.dimmer > 0 ? 0 : 0.35);
     case 'fullscreen':
       final isFull = uiState.fullscreen;
       await uiState.setFullscreen(!isFull);

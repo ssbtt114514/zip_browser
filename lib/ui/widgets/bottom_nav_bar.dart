@@ -22,7 +22,17 @@ class BottomNavBar extends StatelessWidget {
     final ui = context.watch<BrowserUiState>();
     final tab = tm.active;
 
-    return ZbGlassBox(
+    return GestureDetector(
+      // 左右滑动切换标签页：底栏区域不参与横向滚动，手势冲突风险低
+      onHorizontalDragEnd: (details) {
+        final v = details.primaryVelocity ?? 0;
+        if (v <= -180) {
+          tm.activateNext();
+        } else if (v >= 180) {
+          tm.activatePrevious();
+        }
+      },
+      child: ZbGlassBox(
       topBorder: true,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -76,15 +86,17 @@ class BottomNavBar extends StatelessWidget {
             tooltip: '菜单',
             size: 20,
             extent: 44,
-            onTap: () => _openBottomMenu(context),
+            onTap: () => showBottomNavMenu(context),
           ),
         ],
       ),
+      ),
     );
   }
+}
 
-  /// 底部弹出主菜单（Firefox 移动端风格）
-  Future<void> _openBottomMenu(BuildContext context) async {
+/// 底部弹出主菜单（Firefox 移动端风格）；侧边导航栏复用同一弹层。
+Future<void> showBottomNavMenu(BuildContext context) async {
     final zb = context.zb;
     final tm = context.read<TabManager>();
     final config = context.read<ConfigService>();
@@ -126,7 +138,6 @@ class BottomNavBar extends StatelessWidget {
         );
       },
     );
-    if (action == null || !context.mounted) return;
-    await handleMainMenuAction(context, action);
-  }
+  if (action == null || !context.mounted) return;
+  await handleMainMenuAction(context, action);
 }

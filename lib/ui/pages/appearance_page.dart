@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/orientation_mode.dart';
 import '../../core/theme/appearance_settings.dart';
 import '../../core/theme/style_mode.dart';
 import '../../services/config_service.dart';
@@ -448,6 +449,49 @@ class AppearancePage extends StatelessWidget {
                   value: context.watch<ConfigService>().clipboardDetectEnabled,
                   onChanged: (v) =>
                       context.read<ConfigService>().setClipboardDetectEnabled(v),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.screen_rotation_outlined),
+                  title: const Text('屏幕方向'),
+                  subtitle: Text(
+                    context.watch<ConfigService>().orientation.description,
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  trailing: DropdownButton<AppOrientationMode>(
+                    value: context.watch<ConfigService>().orientation,
+                    underline: const SizedBox.shrink(),
+                    style: const TextStyle(fontSize: 13),
+                    items: [
+                      for (final m in AppOrientationMode.values)
+                        DropdownMenuItem(value: m, child: Text(m.label)),
+                    ],
+                    onChanged: (m) {
+                      if (m == null) return;
+                      context.read<ConfigService>().setOrientation(m);
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.nightlight_outlined),
+                  title: const Text('护眼调光'),
+                  subtitle: Text(
+                    '全界面黑色遮罩，当前 ${(context.watch<ConfigService>().dimmer * 100).round()}%',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Slider(
+                    value: context.watch<ConfigService>().dimmer,
+                    max: 0.6,
+                    divisions: 12,
+                    label:
+                        '${(context.watch<ConfigService>().dimmer * 100).round()}%',
+                    onChanged: (v) =>
+                        context.read<ConfigService>().setDimmer(v),
+                  ),
                 ),
               ],
             ),
